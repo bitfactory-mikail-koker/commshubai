@@ -133,7 +133,7 @@ function AgentCard({ agent, canManage }: { agent: AgentRow; canManage: boolean }
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href={kind === "external" ? "/external" : "/internal"}
-              className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[0.8125rem] font-medium text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[0.8125rem] font-medium text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
             >
               Werkruimte
               <ArrowRight className="size-3.5" />
@@ -592,7 +592,7 @@ export default async function AgentsPage({
                 scroll={false}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "-mb-px border-b-2 px-3 py-2.5 text-sm font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                  "-mb-px border-b-2 px-3 py-2.5 text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   isActive ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
                 )}
               >

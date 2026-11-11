@@ -61,7 +61,7 @@ export default async function MyDataPage() {
     <div className="space-y-7">
       <Link
         href="/for-me"
-        className="inline-flex items-center gap-1.5 rounded-sm text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="inline-flex items-center gap-1.5 rounded-sm text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
       >
         <ArrowLeft className="size-4" strokeWidth={1.75} />
         Voor mij

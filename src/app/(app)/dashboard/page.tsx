@@ -273,7 +273,7 @@ export default async function DashboardPage({
                             <td>
                               <Link
                                 href={agent.kind === "external" ? "/external" : "/internal"}
-                                className="group flex items-center gap-2.5 rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                                className="group flex items-center gap-2.5 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                               >
                                 <AgentAvatar kind={agent.kind} />
                                 <span className="min-w-0">

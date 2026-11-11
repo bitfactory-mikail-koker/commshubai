@@ -152,7 +152,7 @@ export default async function ProjectsPage({
             <Link
               href={showArchive ? "/projects" : "/projects?archief=1"}
               scroll={false}
-              className="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[0.8125rem] font-medium text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[0.8125rem] font-medium text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
             >
               {showArchive ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
               {showArchive ? "Terug naar de projecten" : `Toon archief (${archived.length})`}

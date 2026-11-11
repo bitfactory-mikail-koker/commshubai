@@ -281,7 +281,7 @@ export function BrandForm({ initial, canManage }: { initial: BrandFormValues; ca
                     <button
                       type="button"
                       aria-label={`${word} verwijderen`}
-                      className="flex size-5 items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-foreground/10 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
+                      className="flex size-5 items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-foreground/10 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                       onClick={() => setValues((v) => ({ ...v, wordsToAvoid: v.wordsToAvoid.filter((w) => w !== word) }))}
                     >
                       <X className="size-3" />

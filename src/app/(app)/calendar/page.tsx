@@ -171,7 +171,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                             <Link
                               href={entry.href}
                               className={cn(
-                                "block rounded-sm text-sm font-medium outline-none hover:underline hover:underline-offset-2 focus-visible:ring-3 focus-visible:ring-ring/50",
+                                "block rounded-sm text-sm font-medium outline-none hover:underline hover:underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring",
                                 done && "text-muted-foreground",
                               )}
                             >
@@ -235,7 +235,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               <Link
                 href={href({ maand: format(addMonths(monthStart, -1), "yyyy-MM") })}
                 aria-label="Vorige maand"
-                className="flex size-8 items-center justify-center rounded-l-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="flex size-8 items-center justify-center rounded-l-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <ChevronLeft className="size-4" />
               </Link>
@@ -245,7 +245,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               <Link
                 href={href({ maand: format(addMonths(monthStart, 1), "yyyy-MM") })}
                 aria-label="Volgende maand"
-                className="flex size-8 items-center justify-center rounded-r-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="flex size-8 items-center justify-center rounded-r-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <ChevronRight className="size-4" />
               </Link>
@@ -253,7 +253,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             {!isCurrentMonth && (
               <Link
                 href={href({ maand: null })}
-                className="inline-flex h-8 items-center rounded-md border bg-card px-3 text-[0.8125rem] font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="inline-flex h-8 items-center rounded-md border bg-card px-3 text-[0.8125rem] font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Vandaag
               </Link>
@@ -273,7 +273,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                   scroll={false}
                   aria-current={classification === option.key ? "page" : undefined}
                   className={cn(
-                    "inline-flex h-7 items-center rounded-md px-2.5 text-[0.8125rem] font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                    "inline-flex h-7 items-center rounded-md px-2.5 text-[0.8125rem] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     classification === option.key ? "bg-secondary text-foreground ring-1 ring-border ring-inset" : "text-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -292,7 +292,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                   scroll={false}
                   aria-current={view === option.key ? "page" : undefined}
                   className={cn(
-                    "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[0.8125rem] font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                    "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[0.8125rem] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     view === option.key ? "bg-secondary text-foreground ring-1 ring-border ring-inset" : "text-muted-foreground hover:text-foreground",
                   )}
                 >

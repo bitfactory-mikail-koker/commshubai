@@ -171,7 +171,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
       <header className="space-y-4">
         <Link
           href="/editorial"
-          className="inline-flex items-center gap-1.5 rounded-sm text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="inline-flex items-center gap-1.5 rounded-sm text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ArrowLeft className="size-4" strokeWidth={1.75} />
           Redactie
@@ -285,7 +285,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
                         <li key={signal.id}>
                           <Link
                             href={`/inbox/${signal.id}`}
-                            className="-mx-1.5 flex items-start gap-2.5 rounded-md px-1.5 py-1.5 text-sm transition-colors duration-150 outline-none hover:bg-subtle focus-visible:ring-3 focus-visible:ring-ring/50"
+                            className="-mx-1.5 flex items-start gap-2.5 rounded-md px-1.5 py-1.5 text-sm transition-colors duration-150 outline-none hover:bg-subtle focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             <Radar className="mt-0.5 size-4 shrink-0 text-muted-foreground" strokeWidth={1.5} />
                             <span className="min-w-0 flex-1 space-y-1">
@@ -310,7 +310,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
                         <li key={interview.id}>
                           <Link
                             href={`/interviews/${interview.id}`}
-                            className="-mx-1.5 flex items-start gap-2.5 rounded-md px-1.5 py-1.5 text-sm transition-colors duration-150 outline-none hover:bg-subtle focus-visible:ring-3 focus-visible:ring-ring/50"
+                            className="-mx-1.5 flex items-start gap-2.5 rounded-md px-1.5 py-1.5 text-sm transition-colors duration-150 outline-none hover:bg-subtle focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             <Mic className="mt-0.5 size-4 shrink-0 text-muted-foreground" strokeWidth={1.5} />
                             <span className="min-w-0 flex-1 space-y-1">

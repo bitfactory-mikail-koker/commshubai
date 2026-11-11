@@ -113,7 +113,7 @@ export function SocialPostCard({
           className="text-sm leading-relaxed"
         />
       ) : (
-        <p className="max-w-2xl rounded-lg border bg-background px-3.5 py-3 text-sm leading-relaxed whitespace-pre-line">{post.body}</p>
+        <p className="max-w-2xl rounded-lg bg-muted/60 px-3.5 py-3 text-sm leading-relaxed whitespace-pre-line">{post.body}</p>
       )}
 
       {noteOpen && (

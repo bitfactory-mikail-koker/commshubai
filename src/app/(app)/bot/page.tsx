@@ -263,7 +263,7 @@ export default async function BotPage({
             scroll={false}
             aria-current={view === option.key ? "page" : undefined}
             className={cn(
-              "inline-flex h-7 items-center rounded-md px-2.5 text-[0.8125rem] font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+              "inline-flex h-7 items-center rounded-md px-2.5 text-[0.8125rem] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
               view === option.key ? "bg-secondary text-foreground ring-1 ring-border ring-inset" : "text-muted-foreground hover:text-foreground",
             )}
           >

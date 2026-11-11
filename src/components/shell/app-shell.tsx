@@ -123,7 +123,7 @@ function NavList({ groups, badges, onNavigate }: { groups: NavGroup[]; badges: P
                     onClick={onNavigate}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex h-8 items-center gap-2.5 rounded-md px-2 text-[0.8125rem] outline-none transition-colors duration-150 focus-visible:ring-3 focus-visible:ring-ring/50",
+                      "flex h-8 items-center gap-2.5 rounded-md px-2 text-[0.8125rem] outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring",
                       active
                         ? "bg-sidebar-accent font-medium text-foreground"
                         : "text-foreground/70 hover:bg-sidebar-accent/60 hover:text-foreground",
@@ -149,7 +149,7 @@ function Brand({ organizationName }: { organizationName: string }) {
   return (
     <Link
       href="/dashboard"
-      className="flex items-center gap-2.5 rounded-md px-2 py-1.5 outline-none transition-colors duration-150 hover:bg-sidebar-accent/60 focus-visible:ring-3 focus-visible:ring-ring/50"
+      className="flex items-center gap-2.5 rounded-md px-2 py-1.5 outline-none transition-colors duration-150 hover:bg-sidebar-accent/60 focus-visible:ring-2 focus-visible:ring-ring"
     >
       <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-foreground text-[0.8125rem] font-semibold text-background">
         C
@@ -167,7 +167,7 @@ function AiStatus({ ai }: { ai: ShellProps["ai"] }) {
     <Link
       href="/settings"
       title={ai.id === "claude" ? ai.label : "Geen API-sleutel ingesteld: analyses en concepten zijn regelgebaseerd."}
-      className="flex h-8 items-center gap-2.5 rounded-md px-2 text-xs text-muted-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+      className="flex h-8 items-center gap-2.5 rounded-md px-2 text-xs text-muted-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
     >
       <Sparkles className="size-4 shrink-0" strokeWidth={1.75} />
       <span className="truncate">{ai.id === "claude" ? "AI: Claude API" : "AI: demo-modus"}</span>
@@ -185,7 +185,7 @@ function BotStatus({ bot }: { bot: NonNullable<ShellProps["bot"]> }) {
           : "De bot laat alleen aan de redactie zien wat hij zou doen. Er gaat niets naar collega's."
       }
       className={cn(
-        "flex h-8 items-center gap-2.5 rounded-md px-2 text-xs outline-none transition-colors duration-150 hover:bg-sidebar-accent/60 focus-visible:ring-3 focus-visible:ring-ring/50",
+        "flex h-8 items-center gap-2.5 rounded-md px-2 text-xs outline-none transition-colors duration-150 hover:bg-sidebar-accent/60 focus-visible:ring-2 focus-visible:ring-ring",
         bot.state === "paused" ? "font-medium text-warning" : "text-muted-foreground hover:text-foreground",
       )}
     >
@@ -202,7 +202,7 @@ function UserMenu({ user }: { user: ShellProps["user"] }) {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left outline-none transition-colors duration-150 hover:bg-sidebar-accent/60 focus-visible:ring-3 focus-visible:ring-ring/50 aria-expanded:bg-sidebar-accent/60"
+          className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left outline-none transition-colors duration-150 hover:bg-sidebar-accent/60 focus-visible:ring-2 focus-visible:ring-ring aria-expanded:bg-sidebar-accent/60"
         >
           <UserAvatar name={user.name} />
           <span className="min-w-0 flex-1 leading-tight">

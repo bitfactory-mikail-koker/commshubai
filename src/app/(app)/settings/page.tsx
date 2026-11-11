@@ -126,7 +126,7 @@ export default async function SettingsPage() {
                 komen; de merkcontrole toetst dat na elke generatie.
               </Notice>
             ) : (
-              <Notice tone="demo" icon={Sparkles} title="Er is geen API-sleutel ingesteld">
+              <Notice tone="demo" icon={Sparkles} title="Er is geen API-sleutel ingesteld" inset>
                 <p>
                   Signaaldetectie werkt nu op trefwoorden en concepten worden opgebouwd uit bronmateriaal en interviewantwoorden.
                   Alles wat zo ontstaat is als demo-uitvoer gemarkeerd.

@@ -141,7 +141,7 @@ export default async function GroupsPage() {
             <>Er geldt nu geen grens voor hoe vaak de bot één persoon een nieuw verzoek stuurt.</>
           )}
         </span>
-        <Link href="/bot" className="font-medium underline underline-offset-4 outline-none hover:text-foreground/80 focus-visible:ring-3 focus-visible:ring-ring/50">
+        <Link href="/bot" className="font-medium underline underline-offset-4 outline-none hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-ring">
           Aanpassen bij Gedrag en postvak
         </Link>
       </p>

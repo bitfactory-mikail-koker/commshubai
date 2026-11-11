@@ -165,7 +165,7 @@ export default async function EditorialPage({ searchParams }: { searchParams: Pr
                   scroll={false}
                   aria-current={view === option.key ? "page" : undefined}
                   className={cn(
-                    "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[0.8125rem] font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                    "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[0.8125rem] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     view === option.key ? "bg-secondary text-foreground ring-1 ring-border ring-inset" : "text-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -231,7 +231,7 @@ export default async function EditorialPage({ searchParams }: { searchParams: Pr
                         <Link
                           key={article.id}
                           href={`/editorial/${article.id}`}
-                          className="block space-y-2.5 rounded-lg border bg-card p-3 transition-colors outline-none hover:border-foreground/25 focus-visible:ring-3 focus-visible:ring-ring/50"
+                          className="block space-y-2.5 rounded-lg border bg-card p-3 transition-colors outline-none hover:border-foreground/25 focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           <div className="flex items-center justify-between gap-2">
                             <ContentTypeLabel type={article.content_type} />
@@ -289,7 +289,7 @@ export default async function EditorialPage({ searchParams }: { searchParams: Pr
                   <TableCell className="max-w-md py-3 pl-5 whitespace-normal">
                     <Link
                       href={`/editorial/${article.id}`}
-                      className="block rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                      className="block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <span className="flex items-center gap-2">
                         <ContentTypeLabel type={article.content_type} />

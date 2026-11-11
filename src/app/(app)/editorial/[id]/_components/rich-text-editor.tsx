@@ -60,7 +60,7 @@ function ToolbarButton({
           onMouseDown={(e) => e.preventDefault()}
           onClick={onClick}
           className={cn(
-            "inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40",
+            "inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40",
             active && "bg-secondary text-foreground ring-1 ring-border ring-inset hover:bg-secondary",
           )}
         >

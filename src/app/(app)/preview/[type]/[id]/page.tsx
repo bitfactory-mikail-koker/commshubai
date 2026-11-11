@@ -359,7 +359,7 @@ export default async function PreviewPage({
       <header className="space-y-4">
         <Link
           href="/for-me"
-          className="inline-flex items-center gap-1.5 rounded-sm text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="inline-flex items-center gap-1.5 rounded-sm text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ArrowLeft className="size-4" strokeWidth={1.75} />
           Voor mij
@@ -412,7 +412,7 @@ export default async function PreviewPage({
 
           {traced.length > 0 && (
             <details className="group rounded-lg border">
-              <summary className="flex items-center gap-2 px-4 py-2.5 text-[0.8125rem] font-medium outline-none hover:bg-subtle focus-visible:ring-3 focus-visible:ring-ring/50">
+              <summary className="flex items-center gap-2 px-4 py-2.5 text-[0.8125rem] font-medium outline-none hover:bg-subtle focus-visible:ring-2 focus-visible:ring-ring">
                 <FileSearch className="size-4 text-muted-foreground" strokeWidth={1.75} />
                 Bronnen per alinea
                 <span className="ml-auto text-xs font-normal text-muted-foreground">

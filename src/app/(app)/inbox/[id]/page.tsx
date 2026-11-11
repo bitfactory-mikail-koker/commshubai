@@ -285,12 +285,12 @@ export default async function SignalDetailPage({ params }: { params: Promise<{ i
                 {(relatedSignals.data ?? []).length > 0 && (
                   <div className="space-y-2.5 px-5 py-4">
                     <p className="text-xs font-medium text-muted-foreground">Gerelateerde signalen</p>
-                    <ul className="space-y-1.5">
+                    <ul className="-mx-3 divide-y">
                       {(relatedSignals.data ?? []).map((related) => (
                         <li key={related.id}>
                           <Link
                             href={`/inbox/${related.id}`}
-                            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 rounded-lg border bg-background px-3 py-2 text-sm outline-none hover:border-foreground/30 focus-visible:ring-3 focus-visible:ring-ring/50"
+                            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 rounded-md px-3 py-2 text-sm outline-none hover:bg-secondary/60 focus-visible:bg-secondary focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             <span className="min-w-0 font-medium">{truncate(related.title, 90)}</span>
                             <span className="flex shrink-0 items-center gap-3">
@@ -369,12 +369,12 @@ export default async function SignalDetailPage({ params }: { params: Promise<{ i
                 {directArticles.length > 0 && (
                   <div className="space-y-2.5 px-5 py-4">
                     <p className="text-xs font-medium text-muted-foreground">Contentitems op basis van dit signaal</p>
-                    <ul className="space-y-1.5">
+                    <ul className="-mx-3 divide-y">
                       {directArticles.map((article) => (
                         <li key={article.id}>
                           <Link
                             href={`/editorial/${article.id}`}
-                            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background px-3 py-2 text-sm outline-none hover:border-foreground/30 focus-visible:ring-3 focus-visible:ring-ring/50"
+                            className="flex flex-wrap items-center justify-between gap-3 rounded-md px-3 py-2 text-sm outline-none hover:bg-secondary/60 focus-visible:bg-secondary focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             <span className="min-w-0">
                               <span className="block text-xs text-muted-foreground">{CONTENT_TYPE_LABELS[article.content_type]}</span>
