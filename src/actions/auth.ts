@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { env } from "@/lib/env";
-import { fail, runAction, type ActionResult } from "@/lib/result";
+import { fail, ok, runAction, type ActionResult } from "@/lib/result";
 import { safeNextPath } from "@/lib/safe-path";
 import { toSlug } from "@/lib/slug";
 import { GOOGLE_LOGIN_DOMAIN, SsoProvider } from "@/lib/sso";
@@ -24,6 +24,7 @@ export async function login(input: z.input<typeof loginSchema>): Promise<ActionR
     if (error) {
       if (/banned/i.test(error.message)) return fail("Dit account is gedeactiveerd. Neem contact op met je beheerder.");
       if (/invalid login credentials/i.test(error.message)) return fail("Onjuist e-mailadres of wachtwoord.");
+      if (/not confirmed/i.test(error.message)) return fail("Bevestig eerst je e-mailadres met de link die we je hebben gestuurd.");
       return fail("Inloggen is mislukt. Controleer of de Supabase-omgeving bereikbaar is.");
     }
     const next = safeNextPath(data.next, "/dashboard");
@@ -36,6 +37,8 @@ export async function logout(): Promise<void> {
   await db.auth.signOut();
   redirect("/login");
 }
+
+const ACCOUNT_EXISTS = "Er bestaat al een account met dit e-mailadres.";
 
 const registerSchema = z.object({
   organizationName: z.string().trim().min(2, "Vul de naam van je organisatie in.").max(120),
@@ -52,17 +55,42 @@ const registerSchema = z.object({
 export async function register(input: z.input<typeof registerSchema>): Promise<ActionResult> {
   return runAction(async () => {
     const data = registerSchema.parse(input);
+    const email = data.email.toLowerCase();
     const admin = createAdminClient();
+    const db = await createClient();
+
+    const { data: signUp, error: signUpError } = await db.auth.signUp({
+      email,
+      password: data.password,
+      options: { data: { full_name: data.fullName } },
+    });
+    if (signUpError) {
+      if (/already/i.test(signUpError.message)) return fail(ACCOUNT_EXISTS, { email: "Dit e-mailadres is al in gebruik." });
+      throw new Error(signUpError.message);
+    }
+    const user = signUp.user;
+    if (!user || (user.identities?.length ?? 0) === 0) return fail(ACCOUNT_EXISTS, { email: "Dit e-mailadres is al in gebruik." });
+    if (signUp.session) {
+      await db.auth.signOut();
+      await admin.auth.admin.deleteUser(user.id);
+      throw new Error("E-mailbevestiging staat uit in de Supabase-instellingen. Zet 'Confirm email' aan voordat mensen zich registreren.");
+    }
+
+    const { data: existingProfile } = await admin.from("profiles").select("id").eq("id", user.id).maybeSingle();
+    if (existingProfile) return fail(ACCOUNT_EXISTS, { email: "Dit e-mailadres is al in gebruik." });
 
     const { data: organization, error: orgError } = await admin
       .from("organizations")
       .insert({ name: data.organizationName, slug: `${toSlug(data.organizationName, { maxLength: 40, fallback: "organisatie" })}-${crypto.randomUUID().slice(0, 6)}` })
       .select("id")
       .single();
-    if (orgError || !organization) throw new Error(orgError?.message ?? "Organisatie kon niet worden aangemaakt.");
+    if (orgError || !organization) {
+      await admin.auth.admin.deleteUser(user.id);
+      throw new Error(orgError?.message ?? "Organisatie kon niet worden aangemaakt.");
+    }
 
-    const rollback = async (userId?: string) => {
-      if (userId) await admin.auth.admin.deleteUser(userId);
+    const rollback = async () => {
+      await admin.auth.admin.deleteUser(user.id);
       await admin.from("organizations").delete().eq("id", organization.id);
     };
 
@@ -71,59 +99,31 @@ export async function register(input: z.input<typeof registerSchema>): Promise<A
       await rollback();
       throw new Error(bootstrapError.message);
     }
-    // Functional roles, emoji, approval rules, rhythms and the bot's defaults (starts in shadow mode).
     const { error: redactieError } = await admin.rpc("bootstrap_redactie", { p_org_id: organization.id });
     if (redactieError) {
       await rollback();
       throw new Error(redactieError.message);
     }
 
-    const { data: created, error: userError } = await admin.auth.admin.createUser({
-      email: data.email.toLowerCase(),
-      password: data.password,
-      email_confirm: true,
-      user_metadata: { full_name: data.fullName },
-    });
-    if (userError || !created.user) {
-      await rollback();
-      if (/already/i.test(userError?.message ?? "")) {
-        return fail("Er bestaat al een account met dit e-mailadres.", { email: "Dit e-mailadres is al in gebruik." });
-      }
-      throw new Error(userError?.message ?? "Account kon niet worden aangemaakt.");
-    }
-
-    const { data: role } = await admin
-      .from("roles")
-      .select("id")
-      .eq("organization_id", organization.id)
-      .eq("key", "administrator")
-      .single();
+    const { data: role } = await admin.from("roles").select("id").eq("organization_id", organization.id).eq("key", "administrator").single();
     const { error: profileError } = await admin.from("profiles").insert({
-      id: created.user.id,
+      id: user.id,
       organization_id: organization.id,
       role_id: role!.id,
       full_name: data.fullName,
-      email: data.email.toLowerCase(),
+      email,
       job_title: "Beheerder",
       avatar_color: "teal",
     });
     if (profileError) {
-      await rollback(created.user.id);
+      await rollback();
       throw new Error(profileError.message);
     }
 
-    const db = await createClient();
-    const { error: signInError } = await db.auth.signInWithPassword({ email: data.email.toLowerCase(), password: data.password });
-    if (signInError) redirect("/login");
-    redirect("/dashboard");
+    return ok("We hebben een e-mail gestuurd om je adres te bevestigen.");
   });
 }
 
-/**
- * Sign in with the Slack account (Sign in with Slack, OpenID Connect). There
- * are no separate accounts: only people who are already known in the
- * organization (imported from Slack by the administrator) get in.
- */
 export async function loginWithSlack(input: { next?: string }): Promise<ActionResult> {
   return runAction(async () => {
     if (!env.slackLoginEnabled) return fail("Inloggen met Slack is niet ingeschakeld.");

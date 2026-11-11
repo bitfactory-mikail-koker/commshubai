@@ -17,6 +17,7 @@ const LOGIN_ERRORS: Record<LoginError, string> = {
   [LoginError.NoAccount]: "Met dit account ben je nog niet bekend. Vraag de beheerder om je toe te voegen.",
   [LoginError.Slack]: "Inloggen met Slack is niet gelukt. Probeer het opnieuw.",
   [LoginError.Google]: "Inloggen met Google is niet gelukt. Probeer het opnieuw.",
+  [LoginError.Confirmation]: "Deze bevestigingslink is niet meer geldig. Maak opnieuw een omgeving aan of vraag de beheerder om hulp.",
   [LoginError.Domain]: `Inloggen met Google kan alleen met een @${GOOGLE_LOGIN_DOMAIN}-adres.`,
 };
 

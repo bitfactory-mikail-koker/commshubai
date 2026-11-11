@@ -10,6 +10,7 @@ export enum LoginError {
   Google = "google",
   NoAccount = "geen-account",
   Domain = "domein",
+  Confirmation = "bevestiging",
 }
 
 export const GOOGLE_LOGIN_DOMAIN = "nobears.nl";
