@@ -252,7 +252,7 @@ export async function runGroupNow(input: { id: string }): Promise<ActionResult> 
     const result = await runOutreachRound({ organizationId: session.organization.id, groupId: z.uuid().parse(input.id) });
     refresh();
     return ok(
-      `Inputronde: ${result.asked} verstuurd, ${result.held} vastgehouden, ${result.blocked.length} tegengehouden.${
+      `Inputronde: ${result.asked} verstuurd, ${result.held} vastgehouden, ${result.blocked.length} tegengehouden${result.failed.length ? `, ${result.failed.length} mislukt` : ""}.${
         result.blocked.length ? ` (${result.blocked.map((b) => `${b.name}: ${b.reason}`).join(" ")})` : ""
       }`,
     );

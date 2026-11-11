@@ -22,6 +22,7 @@ import { wakeSnoozedTopics } from "@/lib/redactie/topics";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { AgentKind, AgentTask, IntegrationProvider } from "@/lib/types";
 import { groupBy, mapConcurrent } from "@/lib/concurrency";
+import { removeOrphanedSources, removeUnlinkedSignals, RetentionError } from "@/lib/retention";
 
 /**
  * Background jobs.
@@ -138,17 +139,21 @@ export async function runTask(taskId: string): Promise<{ ok: boolean; error?: st
   const attempts = task.attempts + 1;
   try {
     const result = await execute(task);
-    await db
+    const { error: completeError } = await db
       .from("agent_tasks")
       .update({ status: "completed", result: toJson(result), attempts, completed_at: new Date().toISOString(), error: null })
       .eq("id", task.id);
+    if (completeError) {
+      console.error("[tasks] could not record completion", task.id, completeError.message);
+      return { ok: false, error: `Taak uitgevoerd, maar de status kon niet worden opgeslagen: ${completeError.message}` };
+    }
     return { ok: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     // A paused agent is not a failure: leave the task queued for later.
     const paused = error instanceof AgentPausedError;
     const retry = !paused && attempts < task.max_attempts;
-    await db
+    const { error: failError } = await db
       .from("agent_tasks")
       .update({
         status: paused || retry ? "queued" : "failed",
@@ -158,6 +163,7 @@ export async function runTask(taskId: string): Promise<{ ok: boolean; error?: st
         scheduled_for: addMinutes(new Date(), paused ? 60 : 5 * 4 ** (attempts - 1)).toISOString(),
       })
       .eq("id", task.id);
+    if (failError) console.error("[tasks] could not record failure", task.id, failError.message);
     return { ok: false, error: message };
   }
 }
@@ -294,33 +300,17 @@ export async function applySignalRetention(organizationId: string, now = new Dat
   const cutoff = new Date(now);
   cutoff.setMonth(cutoff.getMonth() - months);
 
-  const { data: old } = await db
+  const { data: old, error: oldError } = await db
     .from("content_signals")
-    .select("id, primary_source_id")
+    .select("id")
     .eq("organization_id", organizationId)
     .in("status", ["new", "needs_info", "dismissed", "duplicate"])
     .lt("detected_at", cutoff.toISOString())
     .limit(500);
-  const candidates = old ?? [];
-  const { data: linked } = candidates.length
-    ? await db.from("article_signals").select("signal_id").in("signal_id", candidates.map((signal) => signal.id))
-    : { data: [] };
-  const inPieces = new Set((linked ?? []).map((row) => row.signal_id));
-  const removable = candidates.filter((signal) => !inPieces.has(signal.id));
-  let removed = 0;
-  if (removable.length > 0) {
-    const removableIds = removable.map((signal) => signal.id);
-    await db.from("content_opportunities").delete().in("signal_id", removableIds).is("article_id", null);
-    const { data: deleted } = await db.from("content_signals").delete().in("id", removableIds).select("id, primary_source_id");
-    removed = deleted?.length ?? 0;
-    const sourceIds = [...new Set((deleted ?? []).flatMap((signal) => (signal.primary_source_id ? [signal.primary_source_id] : [])))];
-    if (sourceIds.length > 0) {
-      const { data: stillUsed } = await db.from("signal_sources").select("source_message_id").in("source_message_id", sourceIds);
-      const used = new Set((stillUsed ?? []).map((row) => row.source_message_id));
-      const orphaned = sourceIds.filter((id) => !used.has(id));
-      if (orphaned.length > 0) await db.from("source_messages").delete().in("id", orphaned);
-    }
-  }
+  if (oldError) throw new RetentionError("het ophalen van oude signalen", oldError.message);
+  const deleted = await removeUnlinkedSignals(db, (old ?? []).map((signal) => signal.id));
+  const removed = deleted.length;
+  await removeOrphanedSources(db, [...new Set(deleted.flatMap((signal) => (signal.primary_source_id ? [signal.primary_source_id] : [])))]);
   if (removed > 0) {
     await logSystemAction(db, {
       organizationId,
@@ -396,7 +386,8 @@ export async function runDueJobs(options: { organizationId?: string; maxTasks?: 
 
   let orgQuery = db.from("organizations").select("id");
   if (options.organizationId) orgQuery = orgQuery.eq("id", options.organizationId);
-  const { data: organizations } = await orgQuery;
+  const { data: organizations, error: organizationsError } = await orgQuery;
+  if (organizationsError) throw new Error(`Organisaties ophalen mislukt: ${organizationsError.message}`);
 
   await mapConcurrent(organizations ?? [], async (org) => {
     result.organizations++;
@@ -429,7 +420,8 @@ export async function runDueJobs(options: { organizationId?: string; maxTasks?: 
     .order("scheduled_for", { ascending: true })
     .limit(options.maxTasks ?? 10);
   if (options.organizationId) taskQuery = taskQuery.eq("organization_id", options.organizationId);
-  const { data: due } = await taskQuery;
+  const { data: due, error: dueError } = await taskQuery;
+  if (dueError) throw new Error(`Taken ophalen mislukt: ${dueError.message}`);
 
   const tasksByOrganization = [...groupBy(due ?? [], (task) => task.organization_id).values()];
   await mapConcurrent(tasksByOrganization, async (tasks) => {

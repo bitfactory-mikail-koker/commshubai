@@ -11,7 +11,7 @@ import { appLink, loadRedactieSettings, sendBotMessage } from "@/lib/redactie/bo
 import { isoDay } from "@/lib/redactie/conduct";
 import { createAdminClient, type AdminClient } from "@/lib/supabase/admin";
 import type { Channel, InterviewQuestion, OutreachGroup, Rhythm, RhythmKey } from "@/lib/types";
-import { groupBy, mapConcurrent } from "@/lib/concurrency";
+import { errorMessage, groupBy, mapSettled } from "@/lib/concurrency";
 
 /**
  * Vaste ritmes: the monthly team round, the MD-update twice a month, the two
@@ -50,7 +50,7 @@ export async function runOutreachRound(options: {
   organizationId: string;
   groupId: string;
   now?: Date;
-}): Promise<{ asked: number; held: number; blocked: { name: string; reason: string }[] }> {
+}): Promise<{ asked: number; held: number; blocked: { name: string; reason: string }[]; failed: { name: string; reason: string }[] }> {
   const db = createAdminClient();
   const { data: group } = await db.from("outreach_groups").select("*").eq("organization_id", options.organizationId).eq("id", options.groupId).single();
   if (!group) throw new Error("Groep niet gevonden.");
@@ -60,7 +60,8 @@ export async function runOutreachRound(options: {
   let asked = 0;
   let held = 0;
   const blocked: { name: string; reason: string }[] = [];
-  const results = await mapConcurrent(members, (member) =>
+  const failed: { name: string; reason: string }[] = [];
+  const results = await mapSettled(members, (member) =>
     sendBotMessage({
       organizationId: options.organizationId,
       kind: "input_request",
@@ -81,8 +82,14 @@ export async function runOutreachRound(options: {
     }),
   );
   members.forEach((member, index) => {
-    const result = results[index];
+    const outcome = results[index];
+    if (!outcome.ok) {
+      failed.push({ name: member.full_name, reason: errorMessage(outcome.error) });
+      return;
+    }
+    const result = outcome.value;
     if (result.status === "blocked") blocked.push({ name: member.full_name, reason: result.reason ?? "" });
+    else if (result.status === "failed") failed.push({ name: member.full_name, reason: result.reason ?? "" });
     else if (result.status === "shadow" || result.status === "scheduled") held++;
     else asked++;
   });
@@ -92,10 +99,11 @@ export async function runOutreachRound(options: {
     organizationId: options.organizationId,
     action: "outreach.round",
     category: "requested",
-    summary: `Inputronde “${group.name}”: ${asked} verstuurd, ${held} vastgehouden (schaduwmodus of buiten werktijd), ${blocked.length} tegengehouden.`,
-    metadata: { group_id: group.id, blocked },
+    summary: `Inputronde “${group.name}”: ${asked} verstuurd, ${held} vastgehouden (schaduwmodus of buiten werktijd), ${blocked.length} tegengehouden, ${failed.length} mislukt.`,
+    metadata: { group_id: group.id, blocked, failed },
   });
-  return { asked, held, blocked };
+  if (failed.length > 0) console.error("[outreach] messages failed", group.id, failed);
+  return { asked, held, blocked, failed };
 }
 
 // --- MD-update ------------------------------------------------------------------
@@ -307,7 +315,7 @@ export async function composeMdUpdate(options: {
 }
 
 // --- Weekly overview --------------------------------------------------------------
-export async function sendWeeklyOverview(organizationId: string, now = new Date()): Promise<{ recipients: number; body: string }> {
+export async function sendWeeklyOverview(organizationId: string, now = new Date()): Promise<{ recipients: number; failed: number; body: string }> {
   const db = createAdminClient();
   const weekAgo = subWeeks(now, 1).toISOString();
   const count = async (query: PromiseLike<{ count: number | null }>) => (await query).count ?? 0;
@@ -341,8 +349,10 @@ export async function sendWeeklyOverview(organizationId: string, now = new Date(
     .eq("is_active", true)
     .in("role.role_permissions.permission_key", ["content.approve", "content.create"]);
   const ids = Array.from(new Set((editors ?? []).map((e) => e.id)));
-  await mapConcurrent(ids, (id) => sendBotMessage({ organizationId, kind: "weekly_overview", medium: "dm", recipientProfileId: id, body, now }));
-  return { recipients: ids.length, body };
+  const sent = await mapSettled(ids, (id) => sendBotMessage({ organizationId, kind: "weekly_overview", medium: "dm", recipientProfileId: id, body, now }));
+  const failures = sent.filter((outcome) => !outcome.ok || outcome.value.status === "failed");
+  if (failures.length > 0) console.error("[weekly overview] messages failed", organizationId, failures.length);
+  return { recipients: ids.length - failures.length, failed: failures.length, body };
 }
 
 // --- The bot explains itself in its channels ----------------------------------------
@@ -438,7 +448,7 @@ export async function runRhythm(options: {
   let summary = "";
   if (options.key === "weekly_overview") {
     const result = await sendWeeklyOverview(options.organizationId, now);
-    summary = `Weekoverzicht klaargezet voor ${result.recipients} redactielid/-leden.`;
+    summary = `Weekoverzicht klaargezet voor ${result.recipients} redactielid/-leden${result.failed ? `, ${result.failed} mislukt` : ""}.`;
   } else if (options.key === "md_update") {
     const result = await startMdUpdate({ organizationId: options.organizationId, date: now, trigger: options.trigger, triggeredBy: options.triggeredBy });
     summary = result.created

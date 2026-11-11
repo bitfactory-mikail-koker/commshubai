@@ -11,6 +11,7 @@ import { loadRedactieSettings, sendBotMessage } from "@/lib/redactie/bot";
 import { createAdminClient, type AdminClient } from "@/lib/supabase/admin";
 import type { AgentKind, Channel, ContentType, EmojiAction, SignalOrigin } from "@/lib/types";
 import { mapConcurrent } from "@/lib/concurrency";
+import { removeUnlinkedSignals, RetentionError } from "@/lib/retention";
 
 /**
  * Opvangen: how something reaches the editors.
@@ -456,20 +457,13 @@ async function excludeMessage(db: AdminClient, channel: Channel, ts: string): Pr
 
 /** Removes signals and open proposals that rest on one message, unless a piece was already started. */
 async function removeUnusedSignals(db: AdminClient, organizationId: string, messageId: string): Promise<number> {
-  const { data: signals } = await db
+  const { data: signals, error } = await db
     .from("content_signals")
     .select("id")
     .eq("organization_id", organizationId)
     .eq("primary_source_id", messageId);
-  const signalIds = (signals ?? []).map((signal) => signal.id);
-  if (signalIds.length === 0) return 0;
-  const { data: linked } = await db.from("article_signals").select("signal_id").in("signal_id", signalIds);
-  const inPieces = new Set((linked ?? []).map((row) => row.signal_id));
-  const removable = signalIds.filter((id) => !inPieces.has(id));
-  if (removable.length === 0) return 0;
-  await db.from("content_opportunities").delete().in("signal_id", removable).is("article_id", null);
-  await db.from("content_signals").delete().in("id", removable);
-  return removable.length;
+  if (error) throw new RetentionError("het ophalen van signalen", error.message);
+  return (await removeUnlinkedSignals(db, (signals ?? []).map((signal) => signal.id))).length;
 }
 
 /** Looking back: after a new signal the bot may search the channel's recent history for the same subject. */

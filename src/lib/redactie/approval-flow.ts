@@ -6,7 +6,7 @@ import { attributeQuotes, type Speaker } from "@/lib/redactie/quotes";
 import { addWorkingDays, workingDaysBetween } from "@/lib/redactie/workdays";
 import { createAdminClient, type AdminClient } from "@/lib/supabase/admin";
 import type { Approval, ApprovalEntity, ApprovalKind, Classification, InterviewSummary, RuleStep } from "@/lib/types";
-import { mapConcurrent } from "@/lib/concurrency";
+import { errorMessage, mapSettled } from "@/lib/concurrency";
 
 /**
  * Rule-based approval.
@@ -546,7 +546,7 @@ export async function processApprovalDeadlines(organizationId: string, now = new
 
     if (!approval.reminded_at && workingDaysBetween(new Date(approval.requested_at), now) >= REMINDER_AFTER_WORKING_DAYS) {
       await db.from("approvals").update({ reminded_at: now.toISOString() }).eq("id", approval.id);
-      const results = await mapConcurrent(approval.eligible_profile_ids, (profileId) =>
+      const results = await mapSettled(approval.eligible_profile_ids, (profileId) =>
         sendBotMessage({
           organizationId,
           kind: "reminder",
@@ -558,7 +558,13 @@ export async function processApprovalDeadlines(organizationId: string, now = new
           now,
         }),
       );
-      reminded += results.filter((result) => result.status !== "blocked").length;
+      const delivered = results.filter((outcome) => outcome.ok && outcome.value.status !== "blocked" && outcome.value.status !== "failed");
+      const errors = results.flatMap((outcome) => (outcome.ok ? (outcome.value.status === "failed" ? [outcome.value.reason ?? "mislukt"] : []) : [errorMessage(outcome.error)]));
+      if (errors.length > 0) console.error("[approvals] reminder failed", approval.id, errors);
+      if (errors.length === results.length && results.length > 0) {
+        await db.from("approvals").update({ reminded_at: null }).eq("id", approval.id);
+      }
+      reminded += delivered.length;
     }
   }
 
