@@ -1,5 +1,6 @@
 export const MAX_QUERY_LENGTH = 120;
 export const MAX_TERMS = 8;
+export const MIN_TERM_LENGTH = 2;
 
 export type ParsedQuery = {
   terms: string[];
@@ -17,7 +18,7 @@ export function parseSearchQuery(raw: string | null | undefined): ParsedQuery | 
     .normalize("NFKC")
     .toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)
-    .filter((term) => term.length > 0)
+    .filter((term) => term.length >= MIN_TERM_LENGTH)
     .slice(0, MAX_TERMS);
   if (terms.length === 0) return null;
   return {

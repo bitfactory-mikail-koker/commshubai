@@ -1,15 +1,18 @@
 import escapeRegExp from "escape-string-regexp";
 import { SNIPPET_END, SNIPPET_START } from "@/lib/search/markers";
 
+export const MIN_HIGHLIGHT_LENGTH = 2;
+
 export type TextPart = { text: string; match: boolean };
 
 export function highlightTerms(text: string, terms: string[]): TextPart[] {
-  if (terms.length === 0 || text.length === 0) return [{ text, match: false }];
-  const pattern = new RegExp(`(${terms.map(escapeRegExp).join("|")})`, "giu");
+  const usable = terms.filter((term) => term.length >= MIN_HIGHLIGHT_LENGTH);
+  if (usable.length === 0 || text.length === 0) return [{ text, match: false }];
+  const pattern = new RegExp(`(${usable.map(escapeRegExp).join("|")})`, "giu");
   return text
     .split(pattern)
     .filter((part) => part.length > 0)
-    .map((part) => ({ text: part, match: terms.some((term) => term.toLowerCase() === part.toLowerCase()) }));
+    .map((part) => ({ text: part, match: usable.some((term) => term.toLowerCase() === part.toLowerCase()) }));
 }
 
 export function splitSnippet(snippet: string, terms: string[] = []): TextPart[] {

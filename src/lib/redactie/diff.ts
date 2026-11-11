@@ -1,4 +1,4 @@
-import { diffWords as diffWordTokens } from "diff";
+import { diffWordsWithSpace } from "diff";
 import { htmlBlocks } from "@/lib/html-text";
 
 export type DiffPart = { type: "same" | "added" | "removed"; text: string };
@@ -8,7 +8,7 @@ export function htmlToParagraphs(html: string): string {
 }
 
 export function diffWords(before: string, after: string): DiffPart[] {
-  return diffWordTokens(before, after).map((change) => ({
+  return diffWordsWithSpace(before, after).map((change) => ({
     type: change.added ? "added" : change.removed ? "removed" : "same",
     text: change.value,
   }));

@@ -16,6 +16,7 @@ export type EditorArticle = {
   title: string;
   subtitle: string | null;
   bodyHtml: string;
+  previewHtml: SafeHtml;
   text: string;
   words: number;
   status: ContentStatus;

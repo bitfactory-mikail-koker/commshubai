@@ -10,7 +10,7 @@ type UserDb = Awaited<ReturnType<typeof createClient>>;
 
 async function loadNavBadges(db: UserDb, userId: string, access: { editorial: boolean; approves: boolean }): Promise<NavBadges> {
   try {
-    const [{ count: proposals }, { count: mine }, { count: editorQueue }] = await Promise.all([
+    const [proposalsResult, mineResult, editorQueueResult] = await Promise.all([
       access.editorial
         ? db.from("content_opportunities").select("id", { count: "exact", head: true }).eq("status", "proposed")
         : Promise.resolve({ count: 0 }),
@@ -19,7 +19,15 @@ async function loadNavBadges(db: UserDb, userId: string, access: { editorial: bo
         ? db.from("approvals").select("id", { count: "exact", head: true }).eq("decision", "pending").eq("kind", "piece").filter("eligible_profile_ids", "eq", "{}")
         : Promise.resolve({ count: 0 }),
     ]);
-    return { "for-me": (mine ?? 0) + (editorQueue ?? 0), inbox: access.editorial ? (proposals ?? 0) : 0 };
+    const failure = [proposalsResult, mineResult, editorQueueResult].find((result) => "error" in result && result.error);
+    if (failure && "error" in failure && failure.error) {
+      console.error("[layout] could not load the sidebar counters", failure.error.message);
+      return {};
+    }
+    return {
+      "for-me": (mineResult.count ?? 0) + (editorQueueResult.count ?? 0),
+      inbox: access.editorial ? (proposalsResult.count ?? 0) : 0,
+    };
   } catch (error) {
     console.error("[layout] could not load the sidebar counters", error);
     return {};
@@ -104,6 +112,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       badges={badges}
       organizationName={session.organization.name}
       user={{
+        id: session.userId,
         name: session.profile.full_name,
         email: session.profile.email,
         role: roleLabel(session.role.key),

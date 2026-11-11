@@ -93,7 +93,10 @@ export const SEARCH_KINDS: Record<SearchKind, SearchKindDefinition> = {
   [SearchKind.Transcript]: {
     label: "Interviewantwoord",
     plural: "Interviewantwoorden",
-    statusMeta: null,
+    statusMeta: {
+      agent: { label: "Vraag", tone: "neutral" },
+      interviewee: { label: "Antwoord", tone: "neutral" },
+    },
     href: (hit) => (hit.parentId ? `/interviews/${hit.parentId}` : null),
   },
   [SearchKind.Newsletter]: {

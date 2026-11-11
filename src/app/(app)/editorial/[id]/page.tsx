@@ -214,6 +214,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
               title: article.title,
               subtitle: article.subtitle,
               bodyHtml: article.body_html,
+              previewHtml: sanitizeHtml(article.body_html),
               text: stripHtml(article.body_html),
               words: wordCount(article.body_html),
               status,

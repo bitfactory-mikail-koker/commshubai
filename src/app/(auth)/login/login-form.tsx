@@ -40,9 +40,13 @@ export function LoginForm({
       <div className="space-y-1">
         <h1 className="text-xl font-semibold tracking-[-0.014em]">Inloggen</h1>
         <p className="text-[0.8125rem] text-muted-foreground">
-          {slackLogin || googleLogin
+          {googleLogin && slackLogin
             ? "Log in met je Google- of Slack-account. Je hebt geen apart wachtwoord nodig."
-            : "Log in met het account van je organisatie."}
+            : googleLogin
+              ? "Log in met je Google-account. Je hebt geen apart wachtwoord nodig."
+              : slackLogin
+                ? "Log in met je Slack-account. Je hebt geen apart wachtwoord nodig."
+                : "Log in met het account van je organisatie."}
         </p>
       </div>
 
@@ -51,12 +55,12 @@ export function LoginForm({
       {(slackLogin || googleLogin) && (
         <div className="space-y-4">
           {googleLogin && (
-            <Button type="button" className="h-9 w-full" disabled={pending} onClick={() => run(() => loginWithGoogle({ next }))}>
+            <Button type="button" className="h-9 w-full" aria-disabled={pending} onClick={() => !pending && run(() => loginWithGoogle({ next }))}>
               Inloggen met Google (@{googleDomain})
             </Button>
           )}
           {slackLogin && (
-            <Button type="button" className="h-9 w-full" disabled={pending} onClick={() => run(() => loginWithSlack({ next }))}>
+            <Button type="button" className="h-9 w-full" aria-disabled={pending} onClick={() => !pending && run(() => loginWithSlack({ next }))}>
               Inloggen met Slack
             </Button>
           )}
@@ -101,7 +105,7 @@ export function LoginForm({
 
       <p className="text-[0.8125rem] text-muted-foreground">
         Nieuwe organisatie?{" "}
-        <Link href="/register" className="font-medium text-info underline-offset-4 hover:underline">
+        <Link href="/register" className="font-medium text-info underline underline-offset-4">
           Maak een omgeving aan
         </Link>
       </p>
@@ -120,9 +124,9 @@ export function LoginForm({
               <li key={account.email}>
                 <button
                   type="button"
-                  disabled={pending}
-                  onClick={() => submit({ email: account.email, password: demoPassword })}
-                  className="flex h-9 w-full items-center justify-between gap-3 px-3 text-left text-[0.8125rem] outline-none transition-colors duration-150 hover:bg-secondary/70 focus-visible:bg-secondary disabled:opacity-60"
+                  aria-disabled={pending}
+                  onClick={() => !pending && submit({ email: account.email, password: demoPassword })}
+                  className="flex h-9 w-full items-center justify-between gap-3 px-3 text-left text-[0.8125rem] outline-none transition-colors duration-150 hover:bg-secondary/70 focus-visible:bg-secondary focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-disabled:opacity-60"
                 >
                   <span className="font-medium">{account.name}</span>
                   <span className="text-xs text-muted-foreground">{account.role}</span>

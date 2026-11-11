@@ -96,6 +96,16 @@ test.describe("role-based access in the interface", () => {
     await expect(page.getByRole("heading", { name: "Inloggen" })).toBeVisible();
   });
 
+  test("the login page never sends someone off the site", async ({ page }) => {
+    for (const next of ["//evil.example", "/\\evil.example", "https://evil.example"]) {
+      await page.goto(`/login?next=${encodeURIComponent(next)}`);
+      await page.getByRole("button", { name: /Sanne/ }).click();
+      await page.waitForURL(/localhost:3000\/(for-me|dashboard)/);
+      expect(new URL(page.url()).hostname).toBe("localhost");
+      await page.context().clearCookies();
+    }
+  });
+
   test("wrong credentials show a Dutch error", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("E-mailadres").fill("sanne@noordlicht.example");

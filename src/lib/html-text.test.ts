@@ -24,6 +24,15 @@ describe("stripHtml", () => {
   });
 });
 
+describe("horizontal rules", () => {
+  it("leave no dashes behind and do not count as text", () => {
+    expect(stripHtml("<p>a</p><hr><p>b</p>")).toBe("a\nb");
+    expect(htmlTextLength("<hr>")).toBe(0);
+    expect(wordCount("<p>een</p><hr><p>twee</p>")).toBe(2);
+    expect(htmlBlocks("<p>a</p><hr><p>b</p>")).toEqual(["a", "b"]);
+  });
+});
+
 describe("htmlBlocks", () => {
   it("returns one trimmed entry per block", () => {
     expect(htmlBlocks("<p> een </p><blockquote><p>twee</p></blockquote><p></p>")).toEqual(["een", "twee"]);

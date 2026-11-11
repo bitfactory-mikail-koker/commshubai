@@ -1,5 +1,6 @@
 import escapeRegExp from "escape-string-regexp";
-import { parse, TextNode, type Node } from "node-html-parser";
+import { parse } from "node-html-parser";
+import { textNodes } from "@/lib/html-nodes";
 import { stripHtml } from "@/lib/html-text";
 
 /**
@@ -77,11 +78,7 @@ export function attributeQuotes(bodyHtml: string, speakers: Speaker[]): Attribut
   return found;
 }
 
-function textNodes(node: Node): TextNode[] {
-  return node.childNodes.flatMap((child) => (child instanceof TextNode ? [child] : textNodes(child)));
-}
-
-export function highlightQuotes(bodyHtml: string, quotes: string[]): string {
+export function highlightQuotes<T extends string>(bodyHtml: T, quotes: string[]): T {
   const patterns = quotes
     .map((quote) =>
       quote
@@ -102,7 +99,7 @@ export function highlightQuotes(bodyHtml: string, quotes: string[]): string {
     for (const pattern of patterns) text = text.replace(pattern, (match) => `<mark class="quote-mark">${match}</mark>`);
     if (text !== node.rawText) node.parentNode?.exchangeChild(node, parse(text));
   }
-  return root.toString();
+  return root.toString() as T;
 }
 
 export function removeQuote(bodyHtml: string, quote: string): string | null {

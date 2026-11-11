@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Search } from "lucide-react";
 import { SEARCH_KIND_ICONS } from "@/components/shared/search-icons";
 import { MetaBadge } from "@/components/shared/badges";
@@ -7,13 +8,14 @@ import { EmptyState, FilterTabs, PageHeader, Panel } from "@/components/shared/l
 import { Button } from "@/components/ui/button";
 import { requireSession } from "@/lib/auth";
 import { formatDate } from "@/lib/format";
-import { parseSearchKind, SEARCH_KIND_ORDER, SEARCH_KINDS, SearchKind } from "@/lib/search/kinds";
+import { parseSearchKind, SEARCH_KINDS, type SearchKind } from "@/lib/search/kinds";
 import { HighlightedText, SearchResultSnippet } from "@/lib/search/snippet";
-import { SEARCH_PAGE_SIZE, searchAll, type SearchGroup, type SearchHit } from "@/lib/search/search";
+import { MAX_SEARCH_PAGE, SEARCH_PAGE_SIZE, searchAll, type SearchGroup, type SearchHit } from "@/lib/search/search";
 
-export const metadata: Metadata = { title: "Zoeken" };
 
-type SearchParams = Promise<{ q?: string; soort?: string; pagina?: string }>;
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+const firstValue = (value: string | string[] | undefined): string | undefined => (Array.isArray(value) ? value[0] : value);
 
 function searchHref(query: string, kind: SearchKind | null, page = 1): string {
   const params = new URLSearchParams({ q: query });
@@ -42,7 +44,7 @@ function HitRow({ hit, terms }: { hit: SearchHit; terms: string[] }) {
     </div>
   );
   return href ? (
-    <Link href={href} className="block outline-none transition-colors duration-150 hover:bg-secondary/60 focus-visible:bg-secondary">
+    <Link href={href} className="block outline-none transition-colors duration-150 hover:bg-secondary/60 focus-visible:bg-secondary focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
       {body}
     </Link>
   ) : (
@@ -76,28 +78,36 @@ function GroupPanel({ group, query, terms, single }: { group: SearchGroup; query
   );
 }
 
+export async function generateMetadata({ searchParams }: { searchParams: SearchParams }): Promise<Metadata> {
+  const params = await searchParams;
+  const query = (firstValue(params.q) ?? "").trim();
+  const kind = parseSearchKind(firstValue(params.soort));
+  const page = Number.parseInt(firstValue(params.pagina) ?? "1", 10) || 1;
+  if (!query) return { title: "Zoeken" };
+  const parts = [`Zoeken: ${query}`, kind ? SEARCH_KINDS[kind].plural : null, page > 1 ? `pagina ${page}` : null];
+  return { title: parts.filter(Boolean).join(", ") };
+}
+
 export default async function SearchPage({ searchParams }: { searchParams: SearchParams }) {
   await requireSession();
-  const { q, soort, pagina } = await searchParams;
-  const query = (q ?? "").trim();
-  const kind = parseSearchKind(soort);
-  const page = Math.max(1, Number.parseInt(pagina ?? "1", 10) || 1);
-  const results = await searchAll(query, { kind, page });
+  const params = await searchParams;
+  const query = (firstValue(params.q) ?? "").trim();
+  const kind = parseSearchKind(firstValue(params.soort));
+  const requestedPage = Math.min(MAX_SEARCH_PAGE, Math.max(1, Number.parseInt(firstValue(params.pagina) ?? "1", 10) || 1));
+  const results = await searchAll(query, { kind, page: requestedPage });
 
   const tabs = results
     ? [
         { key: "all", label: "Alles", href: searchHref(query, null), count: results.total },
-        ...SEARCH_KIND_ORDER.flatMap((groupKind) => {
-          const group = results.groups.find((candidate) => candidate.kind === groupKind);
-          return group
-            ? [{ key: groupKind, label: SEARCH_KINDS[groupKind].plural, href: searchHref(query, groupKind), count: group.total }]
-            : [];
-        }),
+        ...results.tabs.map((tab) => ({ key: tab.kind, label: SEARCH_KINDS[tab.kind].plural, href: searchHref(query, tab.kind), count: tab.total })),
       ]
     : [];
 
-  const activeGroup = kind && results ? results.groups.find((group) => group.kind === kind) : null;
-  const lastPage = activeGroup ? Math.ceil(activeGroup.total / SEARCH_PAGE_SIZE) : 1;
+  const activeTab = kind && results ? results.tabs.find((tab) => tab.kind === kind) : null;
+  const lastPage = activeTab ? Math.max(1, Math.ceil(activeTab.total / SEARCH_PAGE_SIZE)) : 1;
+  if (kind && activeTab && requestedPage > lastPage) redirect(searchHref(query, kind, lastPage));
+  const page = Math.min(requestedPage, lastPage);
+  const activeGroup = activeTab ? results?.groups.find((group) => group.kind === kind) : null;
 
   return (
     <div className="space-y-6">
@@ -117,7 +127,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Searc
           defaultValue={query}
           placeholder="Zoek op woorden, namen of klanten"
           aria-label="Zoeken"
-          className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="h-9 min-w-0 flex-1 rounded-md border border-foreground/40 bg-background px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
         />
         <Button type="submit" className="h-9">
           <Search />

@@ -5,7 +5,7 @@ import { toHitView, type SearchResponse } from "@/lib/search/view";
 
 export const dynamic = "force-dynamic";
 
-const EMPTY: SearchResponse = { query: "", kind: null, terms: [], total: 0, groups: [] };
+const EMPTY: SearchResponse = { query: "", kind: null, terms: [], total: 0, tabs: [], groups: [] };
 
 export async function GET(request: Request) {
   const session = await getSession();
@@ -23,6 +23,7 @@ export async function GET(request: Request) {
       kind,
       terms: results.terms,
       total: results.total,
+      tabs: results.tabs.map((tab) => ({ kind: tab.kind, label: SEARCH_KINDS[tab.kind].plural, total: tab.total })),
       groups: results.groups.map((group) => ({
         kind: group.kind,
         label: SEARCH_KINDS[group.kind].plural,
@@ -32,7 +33,10 @@ export async function GET(request: Request) {
     };
     return Response.json(body, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    if (error instanceof SearchError) return Response.json({ error: error.message }, { status: 500 });
+    if (error instanceof SearchError) {
+      console.error("[search]", error.message);
+      return Response.json({ error: "Zoeken lukt nu niet." }, { status: 500 });
+    }
     throw error;
   }
 }

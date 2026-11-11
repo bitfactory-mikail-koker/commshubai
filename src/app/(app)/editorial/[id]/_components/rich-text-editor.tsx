@@ -30,7 +30,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { SafeHtml } from "@/lib/safe-html";
 import { cn } from "@/lib/utils";
+
+const fromSchemaOutput = (html: string): SafeHtml => html as SafeHtml;
 
 function ToolbarButton({
   icon: Icon,
@@ -205,7 +208,7 @@ export function RichTextEditor({
 }: {
   value: string;
   editable: boolean;
-  onChange: (content: { html: string; text: string; words: number }) => void;
+  onChange: (content: { html: string; safeHtml: SafeHtml; text: string; words: number }) => void;
   onSelectionChange: (text: string) => void;
 }) {
   const editor = useEditor({
@@ -235,6 +238,7 @@ export function RichTextEditor({
     onUpdate: ({ editor: e }) =>
       onChange({
         html: e.isEmpty ? "" : e.getHTML(),
+        safeHtml: fromSchemaOutput(e.isEmpty ? "" : e.getHTML()),
         text: e.getText({ blockSeparator: "\n" }).trim(),
         words: e.storage.characterCount.words(),
       }),

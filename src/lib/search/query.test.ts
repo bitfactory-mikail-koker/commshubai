@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { MAX_QUERY_LENGTH, MAX_TERMS, parseSearchQuery } from "@/lib/search/query";
+import { MAX_QUERY_LENGTH, MAX_TERMS, MIN_TERM_LENGTH, parseSearchQuery } from "@/lib/search/query";
 
 describe("parseSearchQuery", () => {
   it("returns null for empty or punctuation-only input", () => {
     expect(parseSearchQuery(undefined)).toBeNull();
     expect(parseSearchQuery("   ")).toBeNull();
     expect(parseSearchQuery("&|!():*")).toBeNull();
+  });
+
+  it("ignores single letters, which match nearly everything", () => {
+    expect(MIN_TERM_LENGTH).toBe(2);
+    expect(parseSearchQuery("a")).toBeNull();
+    expect(parseSearchQuery("a b")).toBeNull();
+    expect(parseSearchQuery("een a klant")?.terms).toEqual(["een", "klant"]);
   });
 
   it("builds a prefix AND query from the words", () => {
@@ -18,7 +25,8 @@ describe("parseSearchQuery", () => {
 
   it("cannot inject tsquery operators", () => {
     const parsed = parseSearchQuery("a' | b & !c <-> d");
-    expect(parsed?.tsquery).toBe("a:* & b:* & c:* & d:*");
+    expect(parsed).toBeNull();
+    expect(parseSearchQuery("ab' | cd & !ef <-> gh")?.tsquery).toBe("ab:* & cd:* & ef:* & gh:*");
   });
 
   it("escapes LIKE wildcards in the substring pattern", () => {

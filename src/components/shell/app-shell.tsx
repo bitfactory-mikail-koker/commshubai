@@ -50,8 +50,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SearchDialog } from "@/components/shell/search-dialog";
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { SearchDialog, SearchTrigger } from "@/components/shell/search-dialog";
+import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -88,7 +88,7 @@ export type ShellProps = {
   groups: NavGroup[];
   badges: Promise<NavBadges>;
   organizationName: string;
-  user: { name: string; email: string; role: string; avatarColor: string };
+  user: { id: string; name: string; email: string; role: string; avatarColor: string };
   ai: { id: "claude" | "demo"; label: string };
   /** Shown when the bot is not simply running: paused, or only showing the editors what it would do. */
   bot?: { state: "paused" | "shadow"; href: string } | null;
@@ -249,16 +249,25 @@ function UserMenu({ user }: { user: ShellProps["user"] }) {
   );
 }
 
-function SidebarBody({ groups, badges, organizationName, user, ai, bot, onNavigate }: Omit<ShellProps, "children"> & { onNavigate?: () => void }) {
+function SidebarBody({
+  groups,
+  badges,
+  organizationName,
+  user,
+  ai,
+  bot,
+  onNavigate,
+  onOpenSearch,
+}: Omit<ShellProps, "children"> & { onNavigate?: () => void; onOpenSearch: () => void }) {
   return (
     <>
       <div className="p-2">
         <Brand organizationName={organizationName} />
       </div>
       <div className="px-2 pb-1">
-        <SearchDialog onNavigate={onNavigate} />
+        <SearchTrigger onOpen={onOpenSearch} />
       </div>
-      <div className="flex-1 overflow-y-auto px-2 py-2">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         <NavList groups={groups} badges={badges} onNavigate={onNavigate} />
       </div>
       <div className="space-y-px border-t p-2">
@@ -272,15 +281,20 @@ function SidebarBody({ groups, badges, organizationName, user, ai, bot, onNaviga
 
 export function AppShell({ groups, badges, organizationName, user, ai, bot, children }: ShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const openSearch = () => setSearchOpen(true);
   return (
     <div className="flex min-h-[100dvh]">
+      <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} userId={user.id} onNavigate={() => setMobileOpen(false)} />
       <aside className="sticky top-0 hidden h-[100dvh] w-60 shrink-0 flex-col border-r bg-sidebar lg:flex">
-        <SidebarBody groups={groups} badges={badges} organizationName={organizationName} user={user} ai={ai} bot={bot} />
+        <SidebarBody groups={groups} badges={badges} organizationName={organizationName} user={user} ai={ai} bot={bot} onOpenSearch={openSearch} />
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="sticky top-0 z-30 flex h-13 items-center justify-between gap-3 border-b bg-background px-3 lg:hidden">
           <Brand organizationName={organizationName} />
+          <div className="flex items-center gap-1">
+          <SearchTrigger variant="icon" onOpen={openSearch} />
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" aria-label="Menu openen">
@@ -289,6 +303,7 @@ export function AppShell({ groups, badges, organizationName, user, ai, bot, chil
             </SheetTrigger>
             <SheetContent side="left" className="flex w-72 flex-col gap-0 bg-sidebar p-0">
               <SheetTitle className="sr-only">Navigatie</SheetTitle>
+              <SheetDescription className="sr-only">Navigatie en zoeken</SheetDescription>
               <SidebarBody
                 groups={groups}
                 badges={badges}
@@ -297,9 +312,11 @@ export function AppShell({ groups, badges, organizationName, user, ai, bot, chil
                 ai={ai}
                 bot={bot}
                 onNavigate={() => setMobileOpen(false)}
+                onOpenSearch={openSearch}
               />
             </SheetContent>
           </Sheet>
+          </div>
         </div>
 
         <main className="mx-auto w-full max-w-[1360px] flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">{children}</main>

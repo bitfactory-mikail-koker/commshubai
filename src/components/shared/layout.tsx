@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { initials } from "@/lib/format";
+import { markPlaceholders } from "@/lib/placeholders";
 import type { SafeHtml } from "@/lib/safe-html";
 import { cn } from "@/lib/utils";
 
@@ -192,7 +193,7 @@ export function Field({ label, children, className }: { label: string; children:
 
 /** Renders editorial HTML that has been through sanitizeHtml, which the SafeHtml type guarantees. */
 export function HtmlContent({ html, compact, className }: { html: SafeHtml; compact?: boolean; className?: string }) {
-  const safe = html.replace(/\[AANVULLEN[^\]]*\]/g, (m) => `<mark class="placeholder-mark">${m}</mark>`);
+  const safe = markPlaceholders(html);
   return (
     <div
       className={cn("prose-editorial", compact && "prose-compact", className)}
@@ -212,7 +213,7 @@ export function FilterTabs({
   className?: string;
 }) {
   return (
-    <nav className={cn("flex flex-wrap gap-1", className)} aria-label="Filters">
+    <nav className={cn("flex flex-wrap gap-1", className)} aria-label="Filter op soort">
       {items.map((item) => {
         const isActive = item.key === active;
         return (
@@ -259,7 +260,7 @@ export function Notice({
     danger: { box: "border-danger/20 bg-danger-soft/60", icon: "text-danger" },
   }[tone];
   return (
-    <div className={cn("flex gap-2.5 rounded-lg border px-3.5 py-3 text-[0.8125rem] leading-relaxed", tones.box, className)} role="note">
+    <div className={cn("flex gap-2.5 rounded-lg border px-3.5 py-3 text-[0.8125rem] leading-relaxed", tones.box, className)} role={tone === "warning" || tone === "danger" ? "alert" : "note"}>
       {Icon && <Icon className={cn("mt-0.5 size-4 shrink-0", tones.icon)} strokeWidth={1.75} />}
       <div className="min-w-0 space-y-0.5">
         {title && <p className="font-medium text-foreground">{title}</p>}

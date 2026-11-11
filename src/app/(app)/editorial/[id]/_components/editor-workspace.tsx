@@ -8,7 +8,7 @@ import { Notice } from "@/components/shared/layout";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { fromEditor } from "@/lib/safe-html";
+import type { SafeHtml } from "@/lib/safe-html";
 import { cn } from "@/lib/utils";
 import { ChannelPreview } from "./channel-preview";
 import { CommentsTab } from "./comments-tab";
@@ -48,6 +48,7 @@ export function EditorWorkspace({
   const [html, setHtml] = useState(article.bodyHtml);
   const [words, setWords] = useState(article.words);
   const [text, setText] = useState(article.text);
+  const [preview, setPreview] = useState<SafeHtml>(article.previewHtml);
   const [changeSummary, setChangeSummary] = useState("");
   const [selection, setSelection] = useState("");
 
@@ -149,6 +150,7 @@ export function EditorWorkspace({
 
           <RichTextEditor value={article.bodyHtml} editable={editable} onChange={(next) => {
               setHtml(next.html);
+              setPreview(next.safeHtml);
               setText(next.text);
               setWords(next.words);
             }}
@@ -188,7 +190,7 @@ export function EditorWorkspace({
           contentType={article.contentType}
           title={title}
           subtitle={subtitle}
-          html={fromEditor(html)}
+          html={preview}
           text={text}
           organizationName={organizationName}
           authorName={authorName}

@@ -38,11 +38,16 @@ export type SearchGroup = {
   hits: SearchHit[];
 };
 
+export type SearchTab = { kind: SearchKind; total: number };
+
 export type SearchResults = {
   terms: string[];
   total: number;
+  tabs: SearchTab[];
   groups: SearchGroup[];
 };
+
+export const MAX_SEARCH_PAGE = 500;
 
 export class SearchError extends Error {
   constructor(detail: string) {
@@ -59,7 +64,7 @@ export async function searchAll(
   if (!parsed) return null;
 
   const kind = options.kind ?? null;
-  const page = Math.max(1, Math.floor(options.page ?? 1));
+  const page = Math.min(MAX_SEARCH_PAGE, Math.max(1, Math.floor(options.page ?? 1)));
   const limit = kind ? SEARCH_PAGE_SIZE : SEARCH_PREVIEW_SIZE;
   const offset = kind ? (page - 1) * SEARCH_PAGE_SIZE : 0;
 
@@ -74,9 +79,12 @@ export async function searchAll(
   if (error) throw new SearchError(error.message);
 
   const response = responseSchema.parse(data);
-  const groups = SEARCH_KIND_ORDER.flatMap((groupKind): SearchGroup[] => {
-    const total = response.counts[groupKind] ?? 0;
-    if (total === 0) return [];
+  const tabs = SEARCH_KIND_ORDER.flatMap((tabKind): SearchTab[] => {
+    const total = response.counts[tabKind] ?? 0;
+    return total > 0 ? [{ kind: tabKind, total }] : [];
+  });
+  const groups = tabs.flatMap(({ kind: groupKind, total }): SearchGroup[] => {
+    if (kind && groupKind !== kind) return [];
     const hits = response.rows
       .filter((row) => row.kind === groupKind)
       .map((row) => ({
@@ -93,7 +101,8 @@ export async function searchAll(
 
   return {
     terms: parsed.terms,
-    total: groups.reduce((sum, group) => sum + group.total, 0),
+    total: tabs.reduce((sum, tab) => sum + tab.total, 0),
+    tabs,
     groups,
   };
 }

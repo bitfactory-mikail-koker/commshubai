@@ -11,6 +11,7 @@ const toPlainText = compile({
   selectors: [
     { selector: "a", options: { ignoreHref: true } },
     { selector: "img", format: "skip" },
+    { selector: "hr", format: "skip" },
     { selector: "p", options: BLOCK },
     { selector: "div", options: BLOCK },
     { selector: "blockquote", format: "block", options: BLOCK },

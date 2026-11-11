@@ -22,6 +22,7 @@ import { DecisionPanel, type DecisionItem } from "./_components/decision-panel";
 import { FinalCheck } from "./_components/final-check";
 import { PassageActions } from "./_components/passage-actions";
 import { groupBy } from "@/lib/concurrency";
+import { markPlaceholders } from "@/lib/placeholders";
 
 export const metadata: Metadata = { title: "Voorvertoning" };
 
@@ -307,7 +308,7 @@ export default async function PreviewPage({
   const view = query.toon === "alles" || !diff ? "alles" : "wijzigingen";
 
   if (entityType === "article") {
-    const marked = highlightQuotes(bodyHtml, ownQuotes).replace(/\[AANVULLEN[^\]]*\]/g, (m) => `<mark class="placeholder-mark">${m}</mark>`);
+    const marked = markPlaceholders(highlightQuotes(bodyHtml, ownQuotes));
     main = (
       <div className="space-y-4">
         {diff && (

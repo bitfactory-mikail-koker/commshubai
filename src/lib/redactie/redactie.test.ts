@@ -140,6 +140,14 @@ describe("quotes", () => {
   });
 });
 
+describe("diff whitespace", () => {
+  it("shows a changed gap between words", () => {
+    const parts = diffWords("een twee", "een  twee");
+    expect(hasChanges(parts)).toBe(false);
+    expect(parts.some((part) => part.type !== "same")).toBe(true);
+  });
+});
+
 describe("diff", () => {
   it("shows only what changed", () => {
     const parts = diffWords("Tim is projectmanager bij ons.", "Tim is projectleider bij ons.");
