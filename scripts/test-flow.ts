@@ -17,6 +17,7 @@ import type { Database } from "../src/lib/database.types";
 import { DEMO_PASSWORD } from "./seed-content";
 
 config({ path: ".env.local" });
+delete process.env.ANTHROPIC_API_KEY;
 
 let passed = 0;
 let failed = 0;

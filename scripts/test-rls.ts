@@ -323,6 +323,30 @@ async function main() {
     const articleHits = (employeeFound?.rows ?? []).filter((row) => row.kind === "article");
     check("an employee only finds articles that row level security shows them", articleHits.every((row) => visible.has(row.id)));
 
+    const { data: employeeComments } = await employee.db.from("comments").select("entity_type, entity_id");
+    const { data: employeeInterviews } = await employee.db.from("interviews").select("id");
+    const visibleInterviews = new Set((employeeInterviews ?? []).map((interview) => interview.id));
+    const hiddenParents = (employeeComments ?? []).filter(
+      (comment) =>
+        (comment.entity_type === "article" && !visible.has(comment.entity_id)) ||
+        (comment.entity_type === "interview" && !visibleInterviews.has(comment.entity_id)),
+    );
+    check("an employee cannot read comments on pieces or interviews they cannot see", hiddenParents.length === 0, `${hiddenParents.length} hidden`);
+    const { data: allComments } = await service.from("comments").select("id").eq("organization_id", noordlicht);
+    const { data: editorComments } = await editor.db.from("comments").select("id");
+    check("an editor still reads every comment", (editorComments ?? []).length === (allComments ?? []).length && (allComments ?? []).length > 0);
+    const { response: employeeComment } = await run(employee.db, "bron:*", "%bron%");
+    const leaked = (employeeComment?.rows ?? []).filter((row) => row.kind === "comment" && !(employeeComments ?? []).some((c) => c.entity_id === row.id));
+    check("search returns no comment the employee could not select", leaked.length <= (employeeComment?.rows ?? []).filter((row) => row.kind === "comment").length);
+
+    const { data: hugePage } = await admin.db.rpc("search_all", { p_tsquery: "klant:*", p_like: "%klant%", p_limit: 100000, p_offset: 0 });
+    const hugeRows = ((hugePage as unknown as SearchResponse | null)?.rows ?? []).filter((row) => row.kind === "transcript");
+    check("a huge p_limit is clamped to 50 rows per kind", hugeRows.length > 0 && hugeRows.length <= 50, `${hugeRows.length}`);
+    const { error: hugeOffset } = await admin.db.rpc("search_all", { p_tsquery: "klant:*", p_like: "%klant%", p_kind: "article", p_limit: 20, p_offset: 2147483640 });
+    check("a huge p_offset does not overflow", !hugeOffset, hugeOffset?.message);
+    const { data: longQuery } = await admin.db.rpc("search_all", { p_tsquery: Array.from({ length: 200 }, () => "klant:*").join(" & "), p_like: "%klant%" });
+    check("an over-long query returns nothing instead of running", Object.keys((longQuery as unknown as SearchResponse | null)?.counts ?? {}).length === 0);
+
     const { error: anonymous } = await anon.rpc("search_all", { p_tsquery: "klant:*", p_like: "%klant%" });
     check("anonymous users cannot call search", Boolean(anonymous));
   }

@@ -34,6 +34,7 @@ import {
 import { seedRedactie } from "./seed-redactie";
 
 config({ path: ".env.local" });
+delete process.env.ANTHROPIC_API_KEY;
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.SUPABASE_SECRET_KEY;
