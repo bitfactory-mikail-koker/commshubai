@@ -1,3 +1,5 @@
+import type { UserIdentity } from "@supabase/supabase-js";
+
 export enum SsoProvider {
   Slack = "slack_oidc",
   Google = "google",
@@ -30,4 +32,18 @@ export function auditSummaryFor(provider: SsoProvider): string {
 
 export function isGoogleLoginEmail(email: string | null | undefined): boolean {
   return typeof email === "string" && email.toLowerCase().endsWith(`@${GOOGLE_LOGIN_DOMAIN}`);
+}
+
+export function signedInIdentity(identities: UserIdentity[] | undefined): UserIdentity | null {
+  const stamp = (identity: UserIdentity) => Date.parse(identity.last_sign_in_at ?? identity.created_at ?? "") || 0;
+  return [...(identities ?? [])].sort((a, b) => stamp(b) - stamp(a))[0] ?? null;
+}
+
+export function ssoProviderOf(identity: UserIdentity | null): SsoProvider | null {
+  return Object.values(SsoProvider).find((provider) => provider === identity?.provider) ?? null;
+}
+
+export function googleIdentityAllowed(identity: UserIdentity): boolean {
+  const data = identity.identity_data ?? {};
+  return data.email_verified === true && isGoogleLoginEmail(typeof data.email === "string" ? data.email : null);
 }

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { env } from "@/lib/env";
 import { fail, runAction, type ActionResult } from "@/lib/result";
+import { safeNextPath } from "@/lib/safe-path";
 import { toSlug } from "@/lib/slug";
 import { GOOGLE_LOGIN_DOMAIN, SsoProvider } from "@/lib/sso";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -25,8 +26,7 @@ export async function login(input: z.input<typeof loginSchema>): Promise<ActionR
       if (/invalid login credentials/i.test(error.message)) return fail("Onjuist e-mailadres of wachtwoord.");
       return fail("Inloggen is mislukt. Controleer of de Supabase-omgeving bereikbaar is.");
     }
-    // Only allow same-site relative redirects.
-    const next = data.next && /^\/(?!\/)[\w\-/]*$/.test(data.next) ? data.next : "/dashboard";
+    const next = safeNextPath(data.next, "/dashboard");
     redirect(next);
   });
 }
@@ -139,7 +139,7 @@ export async function loginWithGoogle(input: { next?: string }): Promise<ActionR
 }
 
 async function startSsoLogin(provider: SsoProvider, requestedNext: string | undefined, label: string): Promise<ActionResult> {
-  const next = typeof requestedNext === "string" && requestedNext.startsWith("/") && !requestedNext.startsWith("//") ? requestedNext : "/for-me";
+  const next = safeNextPath(requestedNext, "/for-me");
   const db = await createClient();
   const { data, error } = await db.auth.signInWithOAuth({
     provider,
