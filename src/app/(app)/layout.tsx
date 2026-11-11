@@ -1,4 +1,4 @@
-import { AppShell, type NavGroup } from "@/components/shell/app-shell";
+import { AppShell, type NavBadges, type NavGroup } from "@/components/shell/app-shell";
 import { aiStatus } from "@/lib/ai";
 import { can, requireSession } from "@/lib/auth";
 import { env } from "@/lib/env";
@@ -6,28 +6,41 @@ import { roleLabel } from "@/lib/permissions";
 import { redactieSettings } from "@/lib/redactie/settings";
 import { createClient } from "@/lib/supabase/server";
 
+type UserDb = Awaited<ReturnType<typeof createClient>>;
+
+async function loadNavBadges(db: UserDb, userId: string, access: { editorial: boolean; approves: boolean }): Promise<NavBadges> {
+  try {
+    const [{ count: proposals }, { count: mine }, { count: editorQueue }] = await Promise.all([
+      access.editorial
+        ? db.from("content_opportunities").select("id", { count: "exact", head: true }).eq("status", "proposed")
+        : Promise.resolve({ count: 0 }),
+      db.from("approvals").select("id", { count: "exact", head: true }).eq("decision", "pending").contains("eligible_profile_ids", [userId]),
+      access.approves
+        ? db.from("approvals").select("id", { count: "exact", head: true }).eq("decision", "pending").eq("kind", "piece").filter("eligible_profile_ids", "eq", "{}")
+        : Promise.resolve({ count: 0 }),
+    ]);
+    return { "for-me": (mine ?? 0) + (editorQueue ?? 0), inbox: access.editorial ? (proposals ?? 0) : 0 };
+  } catch (error) {
+    console.error("[layout] could not load the sidebar counters", error);
+    return {};
+  }
+}
+
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const session = await requireSession();
   const db = await createClient();
   const editorial = can(session, "content.create", "content.edit", "content.review", "content.approve");
   const manages = can(session, "users.manage", "agents.manage", "integrations.manage");
 
-  // Sidebar counters. RLS already limits these to what the user may see.
-  const [{ count: proposals }, { count: mine }, { count: editorQueue }] = await Promise.all([
-    db.from("content_opportunities").select("id", { count: "exact", head: true }).eq("status", "proposed"),
-    db.from("approvals").select("id", { count: "exact", head: true }).eq("decision", "pending").contains("eligible_profile_ids", [session.userId]),
-    can(session, "content.approve")
-      ? db.from("approvals").select("id", { count: "exact", head: true }).eq("decision", "pending").eq("kind", "piece").filter("eligible_profile_ids", "eq", "{}")
-      : Promise.resolve({ count: 0 }),
-  ]);
+  const badges = loadNavBadges(db, session.userId, { editorial, approves: can(session, "content.approve") });
 
   const groups: NavGroup[] = [
     {
       label: "Overzicht",
       items: [
-        { key: "for-me", label: "Voor mij", href: "/for-me", badge: (mine ?? 0) + (editorQueue ?? 0) },
+        { key: "for-me", label: "Voor mij", href: "/for-me" },
         { key: "dashboard", label: "Dashboard", href: "/dashboard" },
-        { key: "inbox", label: "Inbox", href: "/inbox", badge: editorial ? (proposals ?? 0) : undefined },
+        { key: "inbox", label: "Inbox", href: "/inbox" },
       ],
     },
     {
@@ -88,6 +101,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <AppShell
       groups={groups}
+      badges={badges}
       organizationName={session.organization.name}
       user={{
         name: session.profile.full_name,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, use, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -50,7 +50,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SearchBox } from "@/components/shell/search-box";
+import { SearchDialog } from "@/components/shell/search-dialog";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
@@ -80,11 +80,13 @@ const ICONS: Record<string, LucideIcon> = {
   demo: PlayCircle,
 };
 
-export type NavItem = { key: string; label: string; href: string; badge?: number };
+export type NavItem = { key: string; label: string; href: string };
+export type NavBadges = Partial<Record<string, number>>;
 export type NavGroup = { label: string; items: NavItem[] };
 
 export type ShellProps = {
   groups: NavGroup[];
+  badges: Promise<NavBadges>;
   organizationName: string;
   user: { name: string; email: string; role: string; avatarColor: string };
   ai: { id: "claude" | "demo"; label: string };
@@ -93,7 +95,17 @@ export type ShellProps = {
   children: React.ReactNode;
 };
 
-function NavList({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () => void }) {
+function NavBadge({ badges, itemKey }: { badges: Promise<NavBadges>; itemKey: string }) {
+  const count = use(badges)[itemKey];
+  if (!count) return null;
+  return (
+    <span className="ml-auto min-w-5 rounded-xs bg-foreground/[0.07] px-1 text-center text-xs leading-5 font-medium text-foreground/80 tabular-nums">
+      {count}
+    </span>
+  );
+}
+
+function NavList({ groups, badges, onNavigate }: { groups: NavGroup[]; badges: Promise<NavBadges>; onNavigate?: () => void }) {
   const pathname = usePathname();
   return (
     <nav className="flex flex-col gap-4" aria-label="Hoofdnavigatie">
@@ -119,11 +131,9 @@ function NavList({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () =
                   >
                     <Icon className={cn("size-4 shrink-0", active ? "text-foreground" : "text-muted-foreground")} strokeWidth={1.75} />
                     <span className="truncate">{item.label}</span>
-                    {item.badge ? (
-                      <span className="ml-auto min-w-5 rounded-xs bg-foreground/[0.07] px-1 text-center text-xs leading-5 font-medium text-foreground/80 tabular-nums">
-                        {item.badge}
-                      </span>
-                    ) : null}
+                    <Suspense fallback={null}>
+                      <NavBadge badges={badges} itemKey={item.key} />
+                    </Suspense>
                   </Link>
                 </li>
               );
@@ -239,17 +249,17 @@ function UserMenu({ user }: { user: ShellProps["user"] }) {
   );
 }
 
-function SidebarBody({ groups, organizationName, user, ai, bot, onNavigate }: Omit<ShellProps, "children"> & { onNavigate?: () => void }) {
+function SidebarBody({ groups, badges, organizationName, user, ai, bot, onNavigate }: Omit<ShellProps, "children"> & { onNavigate?: () => void }) {
   return (
     <>
       <div className="p-2">
         <Brand organizationName={organizationName} />
       </div>
       <div className="px-2 pb-1">
-        <SearchBox onNavigate={onNavigate} shortcut={!onNavigate} />
+        <SearchDialog onNavigate={onNavigate} />
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-2">
-        <NavList groups={groups} onNavigate={onNavigate} />
+        <NavList groups={groups} badges={badges} onNavigate={onNavigate} />
       </div>
       <div className="space-y-px border-t p-2">
         {bot && <BotStatus bot={bot} />}
@@ -260,12 +270,12 @@ function SidebarBody({ groups, organizationName, user, ai, bot, onNavigate }: Om
   );
 }
 
-export function AppShell({ groups, organizationName, user, ai, bot, children }: ShellProps) {
+export function AppShell({ groups, badges, organizationName, user, ai, bot, children }: ShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   return (
     <div className="flex min-h-[100dvh]">
       <aside className="sticky top-0 hidden h-[100dvh] w-60 shrink-0 flex-col border-r bg-sidebar lg:flex">
-        <SidebarBody groups={groups} organizationName={organizationName} user={user} ai={ai} bot={bot} />
+        <SidebarBody groups={groups} badges={badges} organizationName={organizationName} user={user} ai={ai} bot={bot} />
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -281,6 +291,7 @@ export function AppShell({ groups, organizationName, user, ai, bot, children }: 
               <SheetTitle className="sr-only">Navigatie</SheetTitle>
               <SidebarBody
                 groups={groups}
+                badges={badges}
                 organizationName={organizationName}
                 user={user}
                 ai={ai}

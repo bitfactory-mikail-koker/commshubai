@@ -1,20 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import {
-  Bot,
-  FolderKanban,
-  Inbox,
-  KanbanSquare,
-  Mail,
-  MessageSquare,
-  MessagesSquare,
-  Mic,
-  Newspaper,
-  Search,
-  Share2,
-  User,
-  type LucideIcon,
-} from "lucide-react";
+import { Search } from "lucide-react";
+import { SEARCH_KIND_ICONS } from "@/components/shared/search-icons";
 import { MetaBadge } from "@/components/shared/badges";
 import { EmptyState, FilterTabs, PageHeader, Panel } from "@/components/shared/layout";
 import { Button } from "@/components/ui/button";
@@ -25,20 +12,6 @@ import { HighlightedText, SearchResultSnippet } from "@/lib/search/snippet";
 import { SEARCH_PAGE_SIZE, searchAll, type SearchGroup, type SearchHit } from "@/lib/search/search";
 
 export const metadata: Metadata = { title: "Zoeken" };
-
-const ICONS: Record<SearchKind, LucideIcon> = {
-  [SearchKind.Signal]: Inbox,
-  [SearchKind.Topic]: KanbanSquare,
-  [SearchKind.Article]: Newspaper,
-  [SearchKind.Interview]: Mic,
-  [SearchKind.Transcript]: MessagesSquare,
-  [SearchKind.Newsletter]: Mail,
-  [SearchKind.SocialPost]: Share2,
-  [SearchKind.Project]: FolderKanban,
-  [SearchKind.Person]: User,
-  [SearchKind.Source]: Bot,
-  [SearchKind.Comment]: MessageSquare,
-};
 
 type SearchParams = Promise<{ q?: string; soort?: string; pagina?: string }>;
 
@@ -51,7 +24,7 @@ function searchHref(query: string, kind: SearchKind | null, page = 1): string {
 
 function HitRow({ hit, terms }: { hit: SearchHit; terms: string[] }) {
   const definition = SEARCH_KINDS[hit.kind];
-  const Icon = ICONS[hit.kind];
+  const Icon = SEARCH_KIND_ICONS[hit.kind];
   const href = definition.href(hit);
   const body = (
     <div className="flex items-start gap-3 px-4 py-3">
