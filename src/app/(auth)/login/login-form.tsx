@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { login, loginWithSlack } from "@/actions/auth";
+import { login, loginWithGoogle, loginWithSlack } from "@/actions/auth";
 import { Notice } from "@/components/shared/layout";
 import { Button } from "@/components/ui/button";
 import { FormField, SubmitButton, useAction } from "@/components/shared/actions";
@@ -16,12 +16,16 @@ export function LoginForm({
   demoAccounts,
   demoPassword,
   slackLogin,
+  googleLogin,
+  googleDomain,
   error,
 }: {
   next?: string;
   demoAccounts: DemoAccount[];
   demoPassword: string | null;
   slackLogin: boolean;
+  googleLogin: boolean;
+  googleDomain: string;
   error: string | null;
 }) {
   const { run, pending, fieldErrors } = useAction();
@@ -36,17 +40,26 @@ export function LoginForm({
       <div className="space-y-1">
         <h1 className="text-xl font-semibold tracking-[-0.014em]">Inloggen</h1>
         <p className="text-[0.8125rem] text-muted-foreground">
-          {slackLogin ? "Log in met je Slack-account. Je hebt geen apart wachtwoord nodig." : "Log in met het account van je organisatie."}
+          {slackLogin || googleLogin
+            ? "Log in met je Google- of Slack-account. Je hebt geen apart wachtwoord nodig."
+            : "Log in met het account van je organisatie."}
         </p>
       </div>
 
       {error && <Notice tone="warning">{error}</Notice>}
 
-      {slackLogin && (
+      {(slackLogin || googleLogin) && (
         <div className="space-y-4">
-          <Button type="button" className="h-9 w-full" disabled={pending} onClick={() => run(() => loginWithSlack({ next }))}>
-            Inloggen met Slack
-          </Button>
+          {googleLogin && (
+            <Button type="button" className="h-9 w-full" disabled={pending} onClick={() => run(() => loginWithGoogle({ next }))}>
+              Inloggen met Google (@{googleDomain})
+            </Button>
+          )}
+          {slackLogin && (
+            <Button type="button" className="h-9 w-full" disabled={pending} onClick={() => run(() => loginWithSlack({ next }))}>
+              Inloggen met Slack
+            </Button>
+          )}
           <p className="text-center text-xs text-muted-foreground">of met e-mailadres en wachtwoord (beheerders)</p>
         </div>
       )}

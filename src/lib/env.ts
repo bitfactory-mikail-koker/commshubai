@@ -33,6 +33,9 @@ export const env = {
   get slackLoginEnabled() {
     return process.env.NEXT_PUBLIC_SLACK_LOGIN === "true";
   },
+  get googleLoginEnabled() {
+    return process.env.NEXT_PUBLIC_GOOGLE_LOGIN === "true";
+  },
   get inboundMailSecret(): string | null {
     return process.env.INBOUND_MAIL_SECRET?.trim() || null;
   },

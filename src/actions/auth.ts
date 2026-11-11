@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { env } from "@/lib/env";
 import { fail, runAction, type ActionResult } from "@/lib/result";
+import { GOOGLE_LOGIN_DOMAIN, SsoProvider } from "@/lib/sso";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -137,14 +138,29 @@ export async function register(input: z.input<typeof registerSchema>): Promise<A
 export async function loginWithSlack(input: { next?: string }): Promise<ActionResult> {
   return runAction(async () => {
     if (!env.slackLoginEnabled) return fail("Inloggen met Slack is niet ingeschakeld.");
-    const next = typeof input.next === "string" && input.next.startsWith("/") && !input.next.startsWith("//") ? input.next : "/for-me";
-    const db = await createClient();
-    const { data, error } = await db.auth.signInWithOAuth({
-      provider: "slack_oidc",
-      options: { redirectTo: `${env.appUrl.replace(/\/+$/, "")}/auth/callback?next=${encodeURIComponent(next)}`, skipBrowserRedirect: true },
-    });
-    if (error || !data.url) return fail("Inloggen met Slack is nu niet mogelijk. Probeer het later opnieuw.");
-    redirect(data.url);
+    return startSsoLogin(SsoProvider.Slack, input.next, "Slack");
   });
+}
+
+export async function loginWithGoogle(input: { next?: string }): Promise<ActionResult> {
+  return runAction(async () => {
+    if (!env.googleLoginEnabled) return fail("Inloggen met Google is niet ingeschakeld.");
+    return startSsoLogin(SsoProvider.Google, input.next, "Google");
+  });
+}
+
+async function startSsoLogin(provider: SsoProvider, requestedNext: string | undefined, label: string): Promise<ActionResult> {
+  const next = typeof requestedNext === "string" && requestedNext.startsWith("/") && !requestedNext.startsWith("//") ? requestedNext : "/for-me";
+  const db = await createClient();
+  const { data, error } = await db.auth.signInWithOAuth({
+    provider,
+    options: {
+      redirectTo: `${env.appUrl.replace(/\/+$/, "")}/auth/callback?provider=${provider}&next=${encodeURIComponent(next)}`,
+      skipBrowserRedirect: true,
+      queryParams: provider === SsoProvider.Google ? { hd: GOOGLE_LOGIN_DOMAIN, prompt: "select_account" } : undefined,
+    },
+  });
+  if (error || !data.url) return fail(`Inloggen met ${label} is nu niet mogelijk. Probeer het later opnieuw.`);
+  redirect(data.url);
 }
 
