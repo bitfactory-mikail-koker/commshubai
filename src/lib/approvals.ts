@@ -113,7 +113,7 @@ export async function decideApproval(
   let result: AdvanceResult = { state: "waiting" };
   let targets = first;
   for (let round = 0; round < 6 && targets.length > 0; round++) {
-    for (const approval of targets) await record(db, approval, "approved", note);
+    await Promise.all(targets.map((approval) => record(db, approval, "approved", note)));
     result = await advanceApproval({ organizationId: session.organization.id, entityType, entityId }, version);
     if (result.state !== "next_step") break;
     pending = await load();

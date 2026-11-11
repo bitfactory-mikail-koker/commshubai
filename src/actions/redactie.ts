@@ -1,5 +1,6 @@
 "use server";
 
+import { addWeeks } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { logUserAction } from "@/lib/audit";
@@ -13,6 +14,7 @@ import { check, fail, ok, runAction, unwrap, type ActionResult } from "@/lib/res
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { OrgSettings, RuleStep } from "@/lib/types";
+import { toSlug } from "@/lib/slug";
 
 /**
  * What the administrator sets up: people, roles, teams, groups, rhythms,
@@ -23,13 +25,7 @@ import type { OrgSettings, RuleStep } from "@/lib/types";
 const refresh = () => revalidatePath("/", "layout");
 const uuid = z.uuid();
 const time = z.string().regex(/^\d{2}:\d{2}$/, "Gebruik het formaat uu:mm.");
-const slug = (value: string) =>
-  value
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 40);
+const slug = (value: string) => toSlug(value, { separator: "_", maxLength: 40 });
 
 // =============================================================================
 // People
@@ -103,7 +99,7 @@ export async function updateOwnAvailability(input: {
           absent_until: absentUntil,
           contact_opt_out: Boolean(input.contactOptOut),
           ...(pauseWeeks >= 0
-            ? { contact_paused_until: pauseWeeks > 0 ? new Date(Date.now() + pauseWeeks * 7 * 86_400_000).toISOString() : null }
+            ? { contact_paused_until: pauseWeeks > 0 ? addWeeks(new Date(), pauseWeeks).toISOString() : null }
             : {}),
         })
         .eq("id", session.userId),

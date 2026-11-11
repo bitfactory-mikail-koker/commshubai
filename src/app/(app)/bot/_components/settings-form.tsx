@@ -6,6 +6,7 @@ import { FormField, SubmitButton, useAction } from "@/components/shared/actions"
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { formatEuro } from "@/lib/format";
 
 type Values = {
   botName: string;
@@ -22,7 +23,6 @@ type Values = {
   signalRetentionMonths: number;
 };
 
-const euro = (value: number) => `€ ${value.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 function Group({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
@@ -259,7 +259,7 @@ export function BotSettingsForm({
           label="Maandplafond in euro"
           htmlFor="bot-budget"
           error={errors.aiBudgetEur ?? fieldErrors.aiBudgetEur}
-          help={`Deze maand gebruikt: ${euro(spentThisMonth)} in ${callsThisMonth} aanroepen. Is het plafond bereikt, dan beoordeelt en schrijft de bot niets meer tot het omhoog gaat of de nieuwe maand begint. 0 betekent geen plafond.`}
+          help={`Deze maand gebruikt: ${formatEuro(spentThisMonth)} in ${callsThisMonth} aanroepen. Is het plafond bereikt, dan beoordeelt en schrijft de bot niets meer tot het omhoog gaat of de nieuwe maand begint. 0 betekent geen plafond.`}
         >
           <Input
             id="bot-budget"

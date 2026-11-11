@@ -8,7 +8,7 @@ import { AgentAvatar, ToneBadge } from "@/components/shared/badges";
 import { EmptyState, HtmlContent, UserAvatar } from "@/components/shared/layout";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { formatDateTime, wordCount } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import type { VersionItem } from "./types";
 
 export function VersionsTab({
@@ -56,7 +56,7 @@ export function VersionsTab({
                   </p>
                   <p className="text-sm text-muted-foreground">{v.change_summary ?? "Geen toelichting"}</p>
                   <p className="text-xs text-muted-foreground">
-                    {author} · <time dateTime={v.created_at}>{formatDateTime(v.created_at)}</time> · {wordCount(v.body_html)} woorden
+                    {author} · <time dateTime={v.created_at}>{formatDateTime(v.created_at)}</time> · {v.words} woorden
                   </p>
                 </div>
               </div>

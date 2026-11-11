@@ -4,6 +4,7 @@
  *
  *   npm run db:seed && npm run test:rls
  */
+import { addDays, subMinutes } from "date-fns";
 import { config } from "dotenv";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../src/lib/database.types";
@@ -197,7 +198,7 @@ async function main() {
     const { error: setApproved } = await chief.db.from("articles").update({ status: "approved" }).eq("id", articleId);
     check("with an approval record the article can become approved", !setApproved, setApproved?.message);
 
-    const { error: scheduleBlocked } = await chief.db.from("articles").update({ status: "scheduled", publish_at: new Date(Date.now() + 86400_000).toISOString() }).eq("id", articleId);
+    const { error: scheduleBlocked } = await chief.db.from("articles").update({ status: "scheduled", publish_at: addDays(new Date(), 1).toISOString() }).eq("id", articleId);
     check("external content cannot be scheduled while customer permission is unknown", Boolean(scheduleBlocked) && /External publication/i.test(scheduleBlocked!.message), scheduleBlocked?.message);
     const { error: lockedEdit } = await chief.db.from("articles").update({ body_html: "<p>Stiekem aangepast na goedkeuring</p>" }).eq("id", articleId);
     check("approved content is locked against edits", Boolean(lockedEdit) && /locked/i.test(lockedEdit!.message), lockedEdit?.message);
@@ -209,12 +210,12 @@ async function main() {
     await service.from("approvals").delete().eq("id", pending!.id);
     const { data: assigned } = await service
       .from("approvals")
-      .insert({ organization_id: noordlicht, entity_type: "article", entity_id: articleId, version, decision: "pending", kind: "piece", step: 1, eligible_profile_ids: [reviewer.userId], due_at: new Date(Date.now() + 3 * 86400_000).toISOString(), requested_by_profile_id: editor.userId })
+      .insert({ organization_id: noordlicht, entity_type: "article", entity_id: articleId, version, decision: "pending", kind: "piece", step: 1, eligible_profile_ids: [reviewer.userId], due_at: addDays(new Date(), 3).toISOString(), requested_by_profile_id: editor.userId })
       .select("id")
       .single();
     const { error: early } = await chief.db.from("approvals").update({ decision: "approved" }).eq("id", assigned!.id);
     check("editors cannot take an assigned step before its deadline", Boolean(early), early?.message);
-    await service.from("approvals").update({ due_at: new Date(Date.now() - 60_000).toISOString() }).eq("id", assigned!.id);
+    await service.from("approvals").update({ due_at: subMinutes(new Date(), 1).toISOString() }).eq("id", assigned!.id);
     const { error: late } = await chief.db.from("approvals").update({ decision: "approved" }).eq("id", assigned!.id);
     check("after the deadline the editors can decide", !late, late?.message);
     await service.from("approvals").delete().eq("id", assigned!.id);

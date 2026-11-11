@@ -1,4 +1,5 @@
 import { HtmlContent } from "@/components/shared/layout";
+import { sanitizeHtml } from "@/lib/sanitize";
 import type { AgentKind } from "@/lib/types";
 import { groupBySection, type BuilderItem } from "./items";
 
@@ -48,7 +49,7 @@ export function NewsletterPreview({
 
         <div className="space-y-7 px-7 py-7">
           {introHtml ? (
-            <HtmlContent html={introHtml} compact />
+            <HtmlContent html={sanitizeHtml(introHtml)} compact />
           ) : (
             <p className="text-sm text-muted-foreground italic">Nog geen inleiding.</p>
           )}
@@ -78,7 +79,7 @@ export function NewsletterPreview({
 
           {outroHtml && (
             <div className="border-t pt-6">
-              <HtmlContent html={outroHtml} compact />
+              <HtmlContent html={sanitizeHtml(outroHtml)} compact />
             </div>
           )}
         </div>

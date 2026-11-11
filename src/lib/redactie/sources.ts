@@ -1,4 +1,4 @@
-import { stripHtml } from "@/lib/format";
+import { htmlBlocks } from "@/lib/html-text";
 
 /**
  * Which source supports which paragraph. A rough, explainable match on the
@@ -28,11 +28,7 @@ function terms(text: string): Set<string> {
 
 /** Splits a body into its blocks (paragraphs, headings, list items, quotes) as plain text. */
 export function blocksOf(bodyHtml: string): string[] {
-  return bodyHtml
-    .replace(/<\/(p|h[1-6]|li|blockquote)>/gi, "$&\n")
-    .split("\n")
-    .map((block) => stripHtml(block).replace(/\s+/g, " ").trim())
-    .filter((block) => block.length > 0);
+  return htmlBlocks(bodyHtml).map((block) => block.replace(/\s+/g, " "));
 }
 
 export function traceBlocks(blocks: string[], sources: SourceText[]): TracedBlock[] {

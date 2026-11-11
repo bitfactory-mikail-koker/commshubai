@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { env } from "@/lib/env";
 import { fail, runAction, type ActionResult } from "@/lib/result";
+import { toSlug } from "@/lib/slug";
 import { GOOGLE_LOGIN_DOMAIN, SsoProvider } from "@/lib/sso";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -43,18 +44,6 @@ const registerSchema = z.object({
   password: z.string().min(10, "Gebruik minimaal 10 tekens.").max(128),
 });
 
-function slugify(name: string): string {
-  return (
-    name
-      .toLowerCase()
-      .normalize("NFKD")
-      .replace(/[̀-ͯ]/g, "")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 40) || "organisatie"
-  );
-}
-
 /**
  * Creates a new organization with its first administrator. The organization
  * gets the system roles, both agents, empty brand guidelines and unconnected
@@ -67,7 +56,7 @@ export async function register(input: z.input<typeof registerSchema>): Promise<A
 
     const { data: organization, error: orgError } = await admin
       .from("organizations")
-      .insert({ name: data.organizationName, slug: `${slugify(data.organizationName)}-${crypto.randomUUID().slice(0, 6)}` })
+      .insert({ name: data.organizationName, slug: `${toSlug(data.organizationName, { maxLength: 40, fallback: "organisatie" })}-${crypto.randomUUID().slice(0, 6)}` })
       .select("id")
       .single();
     if (orgError || !organization) throw new Error(orgError?.message ?? "Organisatie kon niet worden aangemaakt.");

@@ -1,3 +1,5 @@
+import escapeRegExp from "escape-string-regexp";
+import { stripHtml } from "@/lib/html-text";
 import type { BrandCheck, BrandIssue, Classification, TermRule } from "@/lib/types";
 
 /**
@@ -8,18 +10,6 @@ import type { BrandCheck, BrandIssue, Classification, TermRule } from "@/lib/typ
  * and quotes in the text must be traceable to the source material.
  */
 
-function toText(html: string): string {
-  return html
-    .replace(/<\/(p|h[1-6]|li|blockquote|div)>/gi, "\n")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"');
-}
-
 const normalize = (t: string) =>
   t
     .toLowerCase()
@@ -27,7 +17,6 @@ const normalize = (t: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
-const escapeRegExp = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export function validateBrand(input: {
   html: string;
@@ -42,7 +31,7 @@ export function validateBrand(input: {
   extraIssues?: BrandIssue[];
 }): BrandCheck {
   const issues: BrandIssue[] = [];
-  const text = `${input.title ?? ""}\n${toText(input.html)}`;
+  const text = `${input.title ?? ""}\n${stripHtml(input.html)}`;
   const lower = text.toLowerCase();
   const sourceNormalized = normalize(input.sourceTexts.join("\n"));
   const sourceDigits = input.sourceTexts.join("\n").replace(/\s+/g, " ");

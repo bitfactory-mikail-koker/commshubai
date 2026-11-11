@@ -20,6 +20,7 @@ import type {
   SignalAudience,
   SignalCategory,
 } from "@/lib/types";
+import { escapeTextNode } from "@/lib/html-text";
 
 /**
  * Demo provider: deterministic, rule-based stand-in for the Claude API so the
@@ -32,7 +33,7 @@ import type {
  */
 
 // --- text helpers -----------------------------------------------------------
-const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const esc = escapeTextNode;
 
 function sentences(text: string): string[] {
   return text
@@ -759,7 +760,6 @@ export class DemoProvider implements AIProvider {
     const remove = input.instruction.match(new RegExp(`(?:schrap|verwijder|haal)\\s+(?:de zin\\s+|het woord\\s+)?${q}`, "i"));
 
     const unchanged = (note: string): Revision => ({ title: input.title, bodyHtml: input.bodyHtml, applied: false, note });
-    const esc = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
     if (replace) {
       const [, from, to] = replace;

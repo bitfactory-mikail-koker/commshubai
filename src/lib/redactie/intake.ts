@@ -1,3 +1,4 @@
+import { subDays } from "date-fns";
 import "server-only";
 import { evaluateSignal } from "@/lib/agents/pipelines";
 import { toSourceMaterial, withRun } from "@/lib/agents/runtime";
@@ -9,6 +10,7 @@ import { toJson } from "@/lib/json";
 import { loadRedactieSettings, sendBotMessage } from "@/lib/redactie/bot";
 import { createAdminClient, type AdminClient } from "@/lib/supabase/admin";
 import type { AgentKind, Channel, ContentType, EmojiAction, SignalOrigin } from "@/lib/types";
+import { mapConcurrent } from "@/lib/concurrency";
 
 /**
  * Opvangen: how something reaches the editors.
@@ -459,15 +461,15 @@ async function removeUnusedSignals(db: AdminClient, organizationId: string, mess
     .select("id")
     .eq("organization_id", organizationId)
     .eq("primary_source_id", messageId);
-  let removed = 0;
-  for (const signal of signals ?? []) {
-    const { count: articles } = await db.from("article_signals").select("article_id", { count: "exact", head: true }).eq("signal_id", signal.id);
-    if ((articles ?? 0) > 0) continue; // already part of a piece: the editors decide there
-    await db.from("content_opportunities").delete().eq("signal_id", signal.id).is("article_id", null);
-    await db.from("content_signals").delete().eq("id", signal.id);
-    removed++;
-  }
-  return removed;
+  const signalIds = (signals ?? []).map((signal) => signal.id);
+  if (signalIds.length === 0) return 0;
+  const { data: linked } = await db.from("article_signals").select("signal_id").in("signal_id", signalIds);
+  const inPieces = new Set((linked ?? []).map((row) => row.signal_id));
+  const removable = signalIds.filter((id) => !inPieces.has(id));
+  if (removable.length === 0) return 0;
+  await db.from("content_opportunities").delete().in("signal_id", removable).is("article_id", null);
+  await db.from("content_signals").delete().in("id", removable);
+  return removable.length;
 }
 
 /** Looking back: after a new signal the bot may search the channel's recent history for the same subject. */
@@ -483,18 +485,20 @@ async function looksBack(db: AdminClient, channel: Channel, signalId: string): P
   if (needles.length === 0) return false;
 
   try {
-    const hits = await searchSlackHistory(token, channel.slack_channel_id, new Date(Date.now() - days * 86_400_000), needles, 8);
-    for (const hit of hits) {
+    const hits = await searchSlackHistory(token, channel.slack_channel_id, subDays(new Date(), days), needles, 8);
+    await mapConcurrent(hits, async (hit) => {
       const stored = await storeSlackMessage(db, channel, hit.ts, { text: hit.text, authorSlackUserId: hit.user, occurredAt: hit.occurredAt }, false);
-      if (stored.excluded) continue;
-      await db.from("source_messages").update({ processed_at: new Date().toISOString() }).eq("id", stored.id).is("processed_at", null);
-      await db
-        .from("signal_sources")
-        .upsert(
-          { signal_id: signalId, source_message_id: stored.id, organization_id: channel.organization_id, relation: "related" },
-          { onConflict: "signal_id,source_message_id" },
-        );
-    }
+      if (stored.excluded) return;
+      await Promise.all([
+        db.from("source_messages").update({ processed_at: new Date().toISOString() }).eq("id", stored.id).is("processed_at", null),
+        db
+          .from("signal_sources")
+          .upsert(
+            { signal_id: signalId, source_message_id: stored.id, organization_id: channel.organization_id, relation: "related" },
+            { onConflict: "signal_id,source_message_id" },
+          ),
+      ]);
+    });
     return hits.length > 0;
   } catch (error) {
     console.error("[intake] looking back failed", error);

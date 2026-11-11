@@ -3,6 +3,7 @@ import { acceptOpportunity, createChannelVariant, createInterview, generateSocia
 import { logSystemAction } from "@/lib/audit";
 import { createAdminClient, type AdminClient } from "@/lib/supabase/admin";
 import type { AgentKind, Classification, ContentType, InterviewKind, Opportunity } from "@/lib/types";
+import { mapConcurrent } from "@/lib/concurrency";
 
 /**
  * Beoordelen: what the editors do with a proposal, and the work that follows
@@ -91,8 +92,8 @@ export async function pickUpTopic(options: {
       const { data } = await db.from("projects").select("name, client_name").eq("id", topic.project_id).maybeSingle();
       project = data;
     }
-    for (const person of await interviewees(db, topic, options.intervieweeIds)) {
-      if (already.has(person.id)) continue;
+    const people = (await interviewees(db, topic, options.intervieweeIds)).filter((person) => !already.has(person.id));
+    const outcomes = await mapConcurrent(people, async (person) => {
       try {
         const created = await createInterview({
           organizationId: options.organizationId,
@@ -113,10 +114,14 @@ export async function pickUpTopic(options: {
           project: project?.name ?? null,
           isDemo: topic.is_demo,
         });
-        interviewIds.push(created.interviewId);
+        return { interviewId: created.interviewId, skipped: null };
       } catch (error) {
-        skipped.push(`${person.full_name}: ${error instanceof Error ? error.message : String(error)}`);
+        return { interviewId: null, skipped: `${person.full_name}: ${error instanceof Error ? error.message : String(error)}` };
       }
+    });
+    for (const outcome of outcomes) {
+      if (outcome.interviewId) interviewIds.push(outcome.interviewId);
+      if (outcome.skipped) skipped.push(outcome.skipped);
     }
   }
   return { articleId, interviewIds, skippedInterviews: skipped };

@@ -9,7 +9,7 @@
  */
 import { config } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
-import { addDays, format, setHours, setMinutes, startOfMonth } from "date-fns";
+import { addDays, addMinutes, format, setHours, setMinutes, startOfMonth } from "date-fns";
 import { nl } from "date-fns/locale";
 import { validateBrand } from "../src/lib/agents/brand-validation";
 import type { Database } from "../src/lib/database.types";
@@ -225,7 +225,7 @@ async function main() {
   ];
   const G: Record<string, string> = {};
   for (const g of signals) {
-    const detected = new Date(new Date(at(src(g.primary).days, src(g.primary).hour ?? 10)).getTime() + 5 * 60_000).toISOString();
+    const detected = addMinutes(new Date(at(src(g.primary).days, src(g.primary).hour ?? 10)), 5).toISOString();
     G[g.key] = await insert("content_signals", {
       organization_id: O,
       title: g.title,

@@ -22,7 +22,9 @@ import {
   SIGNAL_CATEGORY_META,
   SOURCE_META,
 } from "@/lib/constants";
-import { formatDate, formatRelative, stripHtml } from "@/lib/format";
+import { formatDate, formatRelative } from "@/lib/format";
+import { stripHtml, wordCount } from "@/lib/html-text";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { fromJson } from "@/lib/json";
 import { createClient } from "@/lib/supabase/server";
 import type { BrandCheck, BrandIssue, ExternalPermission, SourceKind, SourceRef, Stakeholder } from "@/lib/types";
@@ -72,7 +74,8 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
   if (error) throw new Error(error.message);
   if (!article) notFound();
 
-  const [versionsRes, commentsRes, approvalsRes, reviewsRes, signalsRes, profilesRes, activityRes, socialRes, interviewsRes] =
+  const topicNeedsFinalCheck = Boolean(article.opportunity_id && article.classification === "external");
+  const [versionsRes, commentsRes, approvalsRes, reviewsRes, signalsRes, profilesRes, activityRes, socialRes, interviewsRes, round, topicRes] =
     await Promise.all([
       db
         .from("content_versions")
@@ -113,9 +116,17 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
         .limit(25),
       db.from("social_posts").select("id", { count: "exact", head: true }).eq("article_id", id),
       db.from("interviews").select("id, title, status, interviewee_name").eq("article_id", id).order("created_at", { ascending: false }),
+      loadRound(db, "article", id, article.current_version),
+      topicNeedsFinalCheck
+        ? db.from("content_opportunities").select("released_external_at, final_check_at").eq("id", article.opportunity_id!).maybeSingle()
+        : Promise.resolve(null),
     ]);
 
-  const versions = (versionsRes.data ?? []) as VersionItem[];
+  const versions: VersionItem[] = (versionsRes.data ?? []).map((version) => ({
+    ...(version as unknown as Omit<VersionItem, "body_html" | "words">),
+    body_html: sanitizeHtml(version.body_html),
+    words: wordCount(version.body_html),
+  }));
   const comments = (commentsRes.data ?? []) as CommentItem[];
   const approvals = (approvalsRes.data ?? []) as ApprovalItem[];
   const reviews = (reviewsRes.data ?? []) as ReviewItem[];
@@ -130,18 +141,9 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
   const status = article.status;
   const canEdit = can(session, "content.edit", "content.create");
   // The approval round of the current version: who is asked, in which order, and what this person may decide now.
-  const round = await loadRound(db, "article", id, article.current_version);
   const decidable = decidableBy(round.items, session);
   const openRound = round.items.filter((item) => item.decision === "pending");
-  let finalCheckMissing = false;
-  if (article.opportunity_id && article.classification === "external") {
-    const { data: topic } = await db
-      .from("content_opportunities")
-      .select("released_external_at, final_check_at")
-      .eq("id", article.opportunity_id)
-      .maybeSingle();
-    finalCheckMissing = Boolean(topic?.released_external_at && !topic.final_check_at);
-  }
+  const finalCheckMissing = Boolean(topicRes?.data?.released_external_at && !topicRes.data.final_check_at);
   const isExternal = article.classification === "external";
   const hasBody = stripHtml(article.body_html).length >= 20;
   const sourceRefs = fromJson<SourceRef[]>(article.source_refs, []);
@@ -212,6 +214,8 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
               title: article.title,
               subtitle: article.subtitle,
               bodyHtml: article.body_html,
+              text: stripHtml(article.body_html),
+              words: wordCount(article.body_html),
               status,
               version: article.current_version,
               channel: article.channel,

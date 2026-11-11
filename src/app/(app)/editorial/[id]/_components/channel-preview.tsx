@@ -1,7 +1,8 @@
 import { Globe, Hash, Mail, ThumbsUp } from "lucide-react";
 import { HtmlContent } from "@/components/shared/layout";
+import type { SafeHtml } from "@/lib/safe-html";
 import { channelLabel, CONTENT_TYPE_LABELS } from "@/lib/constants";
-import { formatDate, stripHtml } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import type { ContentType } from "@/lib/types";
 
 type PreviewProps = {
@@ -9,13 +10,12 @@ type PreviewProps = {
   contentType: ContentType;
   title: string;
   subtitle: string;
-  html: string;
+  html: SafeHtml;
+  text: string;
   organizationName: string;
   authorName: string;
   date: string | null;
 };
-
-const isEmpty = (html: string) => stripHtml(html).length === 0;
 
 function EmptyBody() {
   return <p className="text-sm text-muted-foreground italic">Er is nog geen tekst om te tonen.</p>;
@@ -23,11 +23,11 @@ function EmptyBody() {
 
 /** Preview of how the item reads in its channel. Not a pixel-perfect copy of the channel. */
 export function ChannelPreview(props: PreviewProps) {
-  const { channel, title, subtitle, html, organizationName, authorName, date, contentType } = props;
+  const { channel, title, subtitle, html, text, organizationName, authorName, date, contentType } = props;
+  const empty = text.length === 0;
   const dateLabel = formatDate(date ?? new Date());
 
   if (channel === "linkedin") {
-    const text = stripHtml(html);
     return (
       <div className="mx-auto max-w-xl rounded-lg border bg-card">
         <div className="flex items-center gap-3 px-4 pt-4">
@@ -67,7 +67,7 @@ export function ChannelPreview(props: PreviewProps) {
               <span className="font-semibold">{authorName}</span>{" "}
               <span className="text-xs text-muted-foreground">{dateLabel}</span>
             </p>
-            {isEmpty(html) ? <EmptyBody /> : <HtmlContent html={html} compact className="font-sans text-[0.9rem] [&_h2]:text-base" />}
+            {empty ? <EmptyBody /> : <HtmlContent html={html} compact className="font-sans text-[0.9rem] [&_h2]:text-base" />}
           </div>
         </div>
       </div>
@@ -89,7 +89,7 @@ export function ChannelPreview(props: PreviewProps) {
         </dl>
         <div className="space-y-4 px-6 py-6 sm:px-8">
           {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
-          {isEmpty(html) ? <EmptyBody /> : <HtmlContent html={html} compact />}
+          {empty ? <EmptyBody /> : <HtmlContent html={html} compact />}
         </div>
         <div className="flex items-center gap-1.5 border-t px-5 py-2.5 text-xs text-muted-foreground">
           <Mail className="size-3.5" strokeWidth={1.5} />
@@ -111,7 +111,7 @@ export function ChannelPreview(props: PreviewProps) {
       <p className="mt-4 border-b pb-5 text-xs text-muted-foreground">
         {organizationName} · {dateLabel}
       </p>
-      <div className="mt-6">{isEmpty(html) ? <EmptyBody /> : <HtmlContent html={html} />}</div>
+      <div className="mt-6">{empty ? <EmptyBody /> : <HtmlContent html={html} />}</div>
     </article>
   );
 }

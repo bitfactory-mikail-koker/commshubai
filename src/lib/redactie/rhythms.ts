@@ -1,5 +1,5 @@
 import "server-only";
-import { format } from "date-fns";
+import { addDays, differenceInDays, format, subWeeks } from "date-fns";
 import { nl } from "date-fns/locale";
 import { createInterview, pairQuestionsAndAnswers } from "@/lib/agents/pipelines";
 import { withRun } from "@/lib/agents/runtime";
@@ -11,6 +11,7 @@ import { appLink, loadRedactieSettings, sendBotMessage } from "@/lib/redactie/bo
 import { isoDay } from "@/lib/redactie/conduct";
 import { createAdminClient, type AdminClient } from "@/lib/supabase/admin";
 import type { Channel, InterviewQuestion, OutreachGroup, Rhythm, RhythmKey } from "@/lib/types";
+import { groupBy, mapConcurrent } from "@/lib/concurrency";
 
 /**
  * Vaste ritmes: the monthly team round, the MD-update twice a month, the two
@@ -59,8 +60,8 @@ export async function runOutreachRound(options: {
   let asked = 0;
   let held = 0;
   const blocked: { name: string; reason: string }[] = [];
-  for (const member of members) {
-    const result = await sendBotMessage({
+  const results = await mapConcurrent(members, (member) =>
+    sendBotMessage({
       organizationId: options.organizationId,
       kind: "input_request",
       medium: "dm",
@@ -77,11 +78,14 @@ export async function runOutreachRound(options: {
             : "Wat is er de afgelopen tijd in jouw team gebeurd dat collega's zouden moeten weten?"),
         "Antwoord gerust in een paar zinnen. Ik leg het voor aan de redactie; zij beslissen of we er iets mee doen. Niets te melden? Dan hoef je niets te doen.",
       ].join("\n\n"),
-    });
+    }),
+  );
+  members.forEach((member, index) => {
+    const result = results[index];
     if (result.status === "blocked") blocked.push({ name: member.full_name, reason: result.reason ?? "" });
     else if (result.status === "shadow" || result.status === "scheduled") held++;
     else asked++;
-  }
+  });
 
   await db.from("outreach_groups").update({ last_run_at: (options.now ?? new Date()).toISOString() }).eq("id", group.id);
   await logSystemAction(db, {
@@ -233,25 +237,25 @@ export async function composeMdUpdate(options: {
       const missing = (interviews ?? []).filter((i) => i.status !== "completed").map((i) => i.interviewee_name);
       if (done.length === 0) throw new Error("Nog geen enkele MD heeft het interview afgerond.");
 
-      const contributions = [];
-      for (const interview of done) {
-        const { data: messages } = await rt.db
-          .from("interview_messages")
-          .select("role, content, question_id")
-          .eq("interview_id", interview.id)
-          .order("created_at", { ascending: true });
-        const transcript: TranscriptEntry[] = (messages ?? []).map((m) => ({
+      const { data: allMessages } = await rt.db
+        .from("interview_messages")
+        .select("interview_id, role, content, question_id")
+        .in("interview_id", done.map((interview) => interview.id))
+        .order("created_at", { ascending: true });
+      const messagesByInterview = groupBy(allMessages ?? [], (message) => message.interview_id);
+      const contributions = done.map((interview) => {
+        const transcript: TranscriptEntry[] = (messagesByInterview.get(interview.id) ?? []).map((m) => ({
           role: m.role as "agent" | "interviewee",
           content: m.content,
           questionId: m.question_id,
         }));
-        contributions.push({
+        return {
           speakerId: interview.interviewee_profile_id as string,
           speakerName: interview.interviewee_name,
           interviewId: interview.id,
           qa: pairQuestionsAndAnswers(fromJson<InterviewQuestion[]>(interview.questions, []), transcript),
-        });
-      }
+        };
+      });
 
       const draft = await rt.ai.composeMdUpdate({
         periodLabel: edition.title,
@@ -305,7 +309,7 @@ export async function composeMdUpdate(options: {
 // --- Weekly overview --------------------------------------------------------------
 export async function sendWeeklyOverview(organizationId: string, now = new Date()): Promise<{ recipients: number; body: string }> {
   const db = createAdminClient();
-  const weekAgo = new Date(now.getTime() - 7 * 86_400_000).toISOString();
+  const weekAgo = subWeeks(now, 1).toISOString();
   const count = async (query: PromiseLike<{ count: number | null }>) => (await query).count ?? 0;
 
   const [proposals, interviews, approvals, overdue, ready, published] = await Promise.all([
@@ -337,9 +341,7 @@ export async function sendWeeklyOverview(organizationId: string, now = new Date(
     .eq("is_active", true)
     .in("role.role_permissions.permission_key", ["content.approve", "content.create"]);
   const ids = Array.from(new Set((editors ?? []).map((e) => e.id)));
-  for (const id of ids) {
-    await sendBotMessage({ organizationId, kind: "weekly_overview", medium: "dm", recipientProfileId: id, body, now });
-  }
+  await mapConcurrent(ids, (id) => sendBotMessage({ organizationId, kind: "weekly_overview", medium: "dm", recipientProfileId: id, body, now }));
   return { recipients: ids.length, body };
 }
 
@@ -401,7 +403,7 @@ async function explainDueChannels(organizationId: string, now: Date): Promise<nu
   let explained = 0;
   for (const channel of channels ?? []) {
     const last = channel.last_explained_at ?? channel.joined_at;
-    if (last && now.getTime() - new Date(last).getTime() < channel.explain_every_days * 86_400_000) continue;
+    if (last && differenceInDays(now, new Date(last)) < channel.explain_every_days) continue;
     await explainInChannel(channel.id, last ? "periodic" : "intro", now);
     explained++;
   }
@@ -466,7 +468,7 @@ export async function runRhythm(options: {
         agentKind: kind,
         title: `${kind === "external" ? "Externe" : "Interne"} nieuwsbrief voorbereiden (${month})`,
         payload: { kind, month: `${month}-01` },
-        scheduledFor: new Date(now.getTime() + rhythm.deadline_days * 86_400_000),
+        scheduledFor: addDays(now, rhythm.deadline_days),
         dedupeKey: `newsletter:${kind}:${month}`,
       });
       summary += ` De nieuwsbrief wordt over ${rhythm.deadline_days} dag(en) voorbereid.`;
@@ -519,7 +521,7 @@ export async function runDueRhythms(organizationId: string, now = new Date()): P
     // Only inside the group's own time window on its day.
     if (minutes < h * 60 + m || minutes >= eh * 60 + em) continue;
     const gap = { weekly: 6, biweekly: 13, monthly: 27 }[group.frequency as "weekly" | "biweekly" | "monthly"] ?? 27;
-    if (group.last_run_at && now.getTime() - new Date(group.last_run_at).getTime() < gap * 86_400_000) continue;
+    if (group.last_run_at && differenceInDays(now, new Date(group.last_run_at)) < gap) continue;
     try {
       await runOutreachRound({ organizationId, groupId: group.id, now });
       ran.push(`groep:${group.name}`);

@@ -11,7 +11,7 @@ import { monthUsage } from "@/lib/ai/metering";
 import { can, requirePagePermission } from "@/lib/auth";
 import { BOT_MESSAGE_KIND_LABELS, BOT_MESSAGE_STATUS_META } from "@/lib/constants";
 import { env } from "@/lib/env";
-import { formatDateTime, formatDay, truncate } from "@/lib/format";
+import { formatDateTime, formatDay, truncate, formatEuro } from "@/lib/format";
 import { redactieSettings } from "@/lib/redactie/settings";
 import { createClient } from "@/lib/supabase/server";
 import type { BotMessageKind, BotMessageStatus } from "@/lib/types";
@@ -57,7 +57,6 @@ function entityLink(type: string | null, id: string | null): { href: string; lab
   }
 }
 
-const euro = (value: number) => `€ ${value.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default async function BotPage({
   searchParams,
@@ -111,8 +110,8 @@ export default async function BotPage({
         : "De bot werkt en zet berichten klaar als gesimuleerd. Er is geen Slack-workspace verbonden, dus er komt niets bij collega's aan.";
   const budget =
     settings.aiBudgetEur > 0
-      ? `${euro(usage.costEur)} van ${euro(settings.aiBudgetEur)} gebruikt deze maand (${usage.calls} aanroepen).`
-      : `${euro(usage.costEur)} gebruikt deze maand (${usage.calls} aanroepen). Er is geen plafond ingesteld.`;
+      ? `${formatEuro(usage.costEur)} van ${formatEuro(settings.aiBudgetEur)} gebruikt deze maand (${usage.calls} aanroepen).`
+      : `${formatEuro(usage.costEur)} gebruikt deze maand (${usage.calls} aanroepen). Er is geen plafond ingesteld.`;
   const overBudget = settings.aiBudgetEur > 0 && usage.costEur >= settings.aiBudgetEur;
 
   const state: { label: string; badge: React.ReactNode; text: string }[] = [

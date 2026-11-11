@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Placeholder from "@tiptap/extension-placeholder";
+import { CharacterCount } from "@tiptap/extensions";
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import {
@@ -204,7 +205,7 @@ export function RichTextEditor({
 }: {
   value: string;
   editable: boolean;
-  onChange: (html: string) => void;
+  onChange: (content: { html: string; text: string; words: number }) => void;
   onSelectionChange: (text: string) => void;
 }) {
   const editor = useEditor({
@@ -222,6 +223,7 @@ export function RichTextEditor({
           HTMLAttributes: { rel: "noopener noreferrer nofollow", target: "_blank" },
         },
       }),
+      CharacterCount,
       Placeholder.configure({ placeholder: "Begin met schrijven, of laat de agent een eerste concept maken…" }),
     ],
     content: value,
@@ -230,7 +232,12 @@ export function RichTextEditor({
     editorProps: {
       attributes: { class: "tiptap prose-editorial px-6 py-5 sm:px-8", "aria-label": "Tekst van het contentitem" },
     },
-    onUpdate: ({ editor: e }) => onChange(e.isEmpty ? "" : e.getHTML()),
+    onUpdate: ({ editor: e }) =>
+      onChange({
+        html: e.isEmpty ? "" : e.getHTML(),
+        text: e.getText({ blockSeparator: "\n" }).trim(),
+        words: e.storage.characterCount.words(),
+      }),
     onSelectionUpdate: ({ editor: e }) => {
       const { from, to } = e.state.selection;
       onSelectionChange(from === to ? "" : e.state.doc.textBetween(from, to, " ").trim());

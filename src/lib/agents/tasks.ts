@@ -1,5 +1,5 @@
 import "server-only";
-import { format } from "date-fns";
+import { addMinutes, format, subDays } from "date-fns";
 import {
   evaluateSignal,
   generateDraft,
@@ -21,6 +21,7 @@ import { redactieSettings } from "@/lib/redactie/settings";
 import { wakeSnoozedTopics } from "@/lib/redactie/topics";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { AgentKind, AgentTask, IntegrationProvider } from "@/lib/types";
+import { groupBy, mapConcurrent } from "@/lib/concurrency";
 
 /**
  * Background jobs.
@@ -154,7 +155,7 @@ export async function runTask(taskId: string): Promise<{ ok: boolean; error?: st
         attempts: paused ? task.attempts : attempts,
         error: message,
         // Exponential backoff: 5, 20, 80 minutes.
-        scheduled_for: new Date(Date.now() + (paused ? 60 : 5 * 4 ** (attempts - 1)) * 60_000).toISOString(),
+        scheduled_for: addMinutes(new Date(), paused ? 60 : 5 * 4 ** (attempts - 1)).toISOString(),
       })
       .eq("id", task.id);
     return { ok: false, error: message };
@@ -256,7 +257,7 @@ export async function applyRetention(organizationId: string): Promise<number> {
   const { data: org } = await db.from("organizations").select("settings").eq("id", organizationId).single();
   const days = Number(fromJson<Record<string, unknown>>(org?.settings, {}).retention_days ?? 0);
   if (!Number.isFinite(days) || days < 30) return 0;
-  const cutoff = new Date(Date.now() - days * 86400_000).toISOString();
+  const cutoff = subDays(new Date(), days).toISOString();
   const { data, error } = await db
     .from("source_messages")
     .update({
@@ -300,20 +301,24 @@ export async function applySignalRetention(organizationId: string, now = new Dat
     .in("status", ["new", "needs_info", "dismissed", "duplicate"])
     .lt("detected_at", cutoff.toISOString())
     .limit(500);
+  const candidates = old ?? [];
+  const { data: linked } = candidates.length
+    ? await db.from("article_signals").select("signal_id").in("signal_id", candidates.map((signal) => signal.id))
+    : { data: [] };
+  const inPieces = new Set((linked ?? []).map((row) => row.signal_id));
+  const removable = candidates.filter((signal) => !inPieces.has(signal.id));
   let removed = 0;
-  for (const signal of old ?? []) {
-    const { count: articles } = await db.from("article_signals").select("article_id", { count: "exact", head: true }).eq("signal_id", signal.id);
-    if ((articles ?? 0) > 0) continue;
-    await db.from("content_opportunities").delete().eq("signal_id", signal.id).is("article_id", null);
-    const { error } = await db.from("content_signals").delete().eq("id", signal.id);
-    if (error) continue;
-    removed++;
-    if (signal.primary_source_id) {
-      const { count: others } = await db
-        .from("signal_sources")
-        .select("signal_id", { count: "exact", head: true })
-        .eq("source_message_id", signal.primary_source_id);
-      if (!others) await db.from("source_messages").delete().eq("id", signal.primary_source_id);
+  if (removable.length > 0) {
+    const removableIds = removable.map((signal) => signal.id);
+    await db.from("content_opportunities").delete().in("signal_id", removableIds).is("article_id", null);
+    const { data: deleted } = await db.from("content_signals").delete().in("id", removableIds).select("id, primary_source_id");
+    removed = deleted?.length ?? 0;
+    const sourceIds = [...new Set((deleted ?? []).flatMap((signal) => (signal.primary_source_id ? [signal.primary_source_id] : [])))];
+    if (sourceIds.length > 0) {
+      const { data: stillUsed } = await db.from("signal_sources").select("source_message_id").in("source_message_id", sourceIds);
+      const used = new Set((stillUsed ?? []).map((row) => row.source_message_id));
+      const orphaned = sourceIds.filter((id) => !used.has(id));
+      if (orphaned.length > 0) await db.from("source_messages").delete().in("id", orphaned);
     }
   }
   if (removed > 0) {
@@ -358,15 +363,17 @@ export async function ensureRecurringTasks(organizationId: string, now = new Dat
     .eq("organization_id", organizationId)
     .eq("status", "connected")
     .in("provider", ["slack", "jira"]);
-  for (const integration of connected ?? []) {
-    await enqueueTask({
-      organizationId,
-      type: "sync_integration",
-      title: `Synchronisatie ${integration.provider}`,
-      payload: { provider: integration.provider },
-      dedupeKey: `sync:${integration.provider}:${hour}`,
-    });
-  }
+  await Promise.all(
+    (connected ?? []).map((integration) =>
+      enqueueTask({
+        organizationId,
+        type: "sync_integration",
+        title: `Synchronisatie ${integration.provider}`,
+        payload: { provider: integration.provider },
+        dedupeKey: `sync:${integration.provider}:${hour}`,
+      }),
+    ),
+  );
 }
 
 export type TickResult = {
@@ -391,7 +398,7 @@ export async function runDueJobs(options: { organizationId?: string; maxTasks?: 
   if (options.organizationId) orgQuery = orgQuery.eq("id", options.organizationId);
   const { data: organizations } = await orgQuery;
 
-  for (const org of organizations ?? []) {
+  await mapConcurrent(organizations ?? [], async (org) => {
     result.organizations++;
     try {
       await ensureRecurringTasks(org.id);
@@ -411,11 +418,11 @@ export async function runDueJobs(options: { organizationId?: string; maxTasks?: 
     } catch (error) {
       result.errors.push(error instanceof Error ? error.message : String(error));
     }
-  }
+  });
 
   let taskQuery = db
     .from("agent_tasks")
-    .select("id")
+    .select("id, organization_id")
     .eq("status", "queued")
     .lte("scheduled_for", new Date().toISOString())
     .order("priority", { ascending: false })
@@ -424,13 +431,16 @@ export async function runDueJobs(options: { organizationId?: string; maxTasks?: 
   if (options.organizationId) taskQuery = taskQuery.eq("organization_id", options.organizationId);
   const { data: due } = await taskQuery;
 
-  for (const task of due ?? []) {
-    const outcome = await runTask(task.id);
-    if (outcome.ok) result.tasksRun++;
-    else {
-      result.tasksFailed++;
-      if (outcome.error) result.errors.push(outcome.error);
+  const tasksByOrganization = [...groupBy(due ?? [], (task) => task.organization_id).values()];
+  await mapConcurrent(tasksByOrganization, async (tasks) => {
+    for (const task of tasks) {
+      const outcome = await runTask(task.id);
+      if (outcome.ok) result.tasksRun++;
+      else {
+        result.tasksFailed++;
+        if (outcome.error) result.errors.push(outcome.error);
+      }
     }
-  }
+  });
   return result;
 }

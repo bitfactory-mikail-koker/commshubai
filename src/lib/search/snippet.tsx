@@ -1,10 +1,7 @@
+import escapeRegExp from "escape-string-regexp";
 import { SNIPPET_END, SNIPPET_START } from "@/lib/search/markers";
 
 export type TextPart = { text: string; match: boolean };
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
 
 export function highlightTerms(text: string, terms: string[]): TextPart[] {
   if (terms.length === 0 || text.length === 0) return [{ text, match: false }];

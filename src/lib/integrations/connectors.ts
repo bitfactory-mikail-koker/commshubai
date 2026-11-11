@@ -1,5 +1,9 @@
 import "server-only";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac } from "node:crypto";
+import { ErrorCode, WebClient, type UsersListResponse, type WebAPICallError } from "@slack/web-api";
+import pLimit from "p-limit";
+import { env } from "@/lib/env";
+import { safeEqual } from "@/lib/secure-compare";
 import type { IntegrationProvider, SourceKind } from "@/lib/types";
 
 /**
@@ -40,16 +44,35 @@ async function request(url: string, init: RequestInit = {}): Promise<Response> {
 }
 
 // --- Slack ------------------------------------------------------------------
-type SlackResponse = { ok: boolean; error?: string; [key: string]: unknown };
+const SLACK_CONCURRENCY = 4;
+const SLACK_RETRIES = 2;
+const slackLimit = pLimit(SLACK_CONCURRENCY);
 
-async function slack(method: string, token: string, params: Record<string, string> = {}): Promise<SlackResponse> {
-  const response = await request(`https://slack.com/api/${method}?${new URLSearchParams(params)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) throw new ConnectorError(`Slack gaf HTTP ${response.status}.`);
-  const json = (await response.json()) as SlackResponse;
-  if (!json.ok) throw new ConnectorError(`Slack meldt: ${json.error ?? "onbekende fout"}.`);
-  return json;
+function slackClient(token: string): WebClient {
+  return new WebClient(token, { slackApiUrl: env.slackApiUrl, timeout: TIMEOUT_MS, retryConfig: { retries: SLACK_RETRIES } });
+}
+
+function slackFailure(error: unknown): ConnectorError {
+  if (error instanceof ConnectorError) return error;
+  const failure = error as WebAPICallError;
+  switch (failure.code) {
+    case ErrorCode.PlatformError:
+      return new ConnectorError(`Slack meldt: ${failure.data.error ?? "onbekende fout"}.`);
+    case ErrorCode.HTTPError:
+      return new ConnectorError(`Slack gaf HTTP ${failure.statusCode}.`);
+    case ErrorCode.RateLimitedError:
+      return new ConnectorError(`Slack vraagt om ${failure.retryAfter} seconden te wachten.`);
+    default:
+      return new ConnectorError("Verbinding mislukt: Slack is niet bereikbaar of antwoordt niet op tijd.");
+  }
+}
+
+async function slackCall<T>(call: (client: WebClient) => Promise<T>, token: string): Promise<T> {
+  try {
+    return await call(slackClient(token));
+  } catch (error) {
+    throw slackFailure(error);
+  }
 }
 
 const listOf = (value: unknown): string[] =>
@@ -61,112 +84,111 @@ const listOf = (value: unknown): string[] =>
 async function testSlack(config: Record<string, unknown>, secrets: Record<string, string>): Promise<ConnectionTest> {
   const token = secrets.bot_token;
   if (!token) return { ok: false, detail: "Er is geen bot-token opgeslagen." };
-  const auth = await slack("auth.test", token);
+  const auth = await slackCall((client) => client.auth.test(), token);
   const channels = listOf(config.channels);
   if (channels.length === 0) return { ok: false, detail: "Geef minimaal één kanaal-ID op." };
-  for (const channel of channels) {
-    const info = await slack("conversations.info", token, { channel });
-    const c = info.channel as { name?: string; is_private?: boolean; is_im?: boolean; is_member?: boolean };
-    if (c.is_private || c.is_im) {
+  const infos = await Promise.all(
+    channels.map((channel) => slackLimit(async () => ({ channel, info: await slackCall((client) => client.conversations.info({ channel }), token) }))),
+  );
+  for (const { channel, info } of infos) {
+    const c = info.channel;
+    if (c?.is_private || c?.is_im) {
       return { ok: false, detail: `Kanaal ${channel} is privé. Alleen openbare kanalen zijn toegestaan.` };
     }
-    if (!c.is_member) {
-      return { ok: false, detail: `De bot is nog geen lid van #${c.name ?? channel}. Nodig de bot uit in het kanaal.` };
+    if (!c?.is_member) {
+      return { ok: false, detail: `De bot is nog geen lid van #${c?.name ?? channel}. Nodig de bot uit in het kanaal.` };
     }
   }
   return { ok: true, detail: `Verbonden met workspace “${String(auth.team)}” als ${String(auth.user)}; ${channels.length} kanaal/kanalen toegankelijk.` };
 }
 
+type RawSlackItem = { channel: string; channelName: string; ts: string; text: string; user: string };
+
+async function channelHistory(token: string, channel: string, since: Date): Promise<RawSlackItem[]> {
+  const info = await slackCall((client) => client.conversations.info({ channel }), token);
+  if (info.channel?.is_private || info.channel?.is_im) return [];
+  const history = await slackCall(
+    (client) => client.conversations.history({ channel, oldest: String(Math.floor(since.getTime() / 1000)), limit: 100 }),
+    token,
+  );
+  return (history.messages ?? []).flatMap((m) =>
+    m.subtype || m.bot_id || !m.text || m.text.trim().length < 20 || !m.user || !m.ts
+      ? []
+      : [{ channel, channelName: info.channel?.name ?? channel, ts: m.ts, text: m.text, user: m.user }],
+  );
+}
+
+async function slackUserName(token: string, user: string): Promise<string> {
+  try {
+    const result = await slackCall((client) => client.users.info({ user }), token);
+    return result.user?.real_name ?? result.user?.name ?? "Onbekend";
+  } catch (error) {
+    if (error instanceof ConnectorError) return "Onbekend";
+    throw error;
+  }
+}
+
 async function syncSlack(config: Record<string, unknown>, secrets: Record<string, string>, since: Date): Promise<IngestMessage[]> {
   const token = secrets.bot_token;
   if (!token) throw new ConnectorError("Er is geen bot-token opgeslagen.");
-  const messages: IngestMessage[] = [];
-  const userNames = new Map<string, string>();
 
-  for (const channel of listOf(config.channels)) {
-    const info = await slack("conversations.info", token, { channel });
-    const c = info.channel as { name?: string; is_private?: boolean; is_im?: boolean };
-    if (c.is_private || c.is_im) continue; // never read private conversations
+  const items = (await Promise.all(listOf(config.channels).map((channel) => slackLimit(() => channelHistory(token, channel, since))))).flat();
+  const users = [...new Set(items.map((item) => item.user))];
+  const names = new Map(await Promise.all(users.map((user) => slackLimit(async () => [user, await slackUserName(token, user)] as const))));
 
-    const history = await slack("conversations.history", token, {
-      channel,
-      oldest: String(Math.floor(since.getTime() / 1000)),
-      limit: "100",
-    });
-    for (const m of (history.messages ?? []) as { ts: string; text?: string; user?: string; subtype?: string; bot_id?: string }[]) {
-      if (m.subtype || m.bot_id || !m.text || m.text.trim().length < 20 || !m.user) continue;
-      if (!userNames.has(m.user)) {
-        try {
-          const user = await slack("users.info", token, { user: m.user });
-          const profile = user.user as { real_name?: string; name?: string };
-          userNames.set(m.user, profile.real_name ?? profile.name ?? "Onbekend");
-        } catch {
-          userNames.set(m.user, "Onbekend");
-        }
-      }
-      messages.push({
-        source: "slack",
-        externalId: `${channel}:${m.ts}`,
-        channel: `#${c.name ?? channel}`,
-        authorName: userNames.get(m.user) ?? null,
-        title: null,
-        body: m.text,
-        url: null,
-        occurredAt: new Date(Number(m.ts) * 1000).toISOString(),
-        metadata: { channel_id: channel },
-      });
-    }
-  }
-  return messages;
+  return items.map((item) => ({
+    source: "slack",
+    externalId: `${item.channel}:${item.ts}`,
+    channel: `#${item.channelName}`,
+    authorName: names.get(item.user) ?? null,
+    title: null,
+    body: item.text,
+    url: null,
+    occurredAt: new Date(Number(item.ts) * 1000).toISOString(),
+    metadata: { channel_id: item.channel },
+  }));
 }
 
-/** Posts a message as the bot. `channel` is a channel id, or a user id for a direct message. */
 export async function postSlackMessage(
   token: string,
   input: { channel: string; text: string; threadTs?: string | null },
 ): Promise<{ ts: string; channel: string }> {
-  const response = await request("https://slack.com/api/chat.postMessage", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json; charset=utf-8" },
-    body: JSON.stringify({
-      channel: input.channel,
-      text: input.text,
-      ...(input.threadTs ? { thread_ts: input.threadTs } : {}),
-      unfurl_links: false,
-    }),
-  });
-  if (!response.ok) throw new ConnectorError(`Slack gaf HTTP ${response.status}.`);
-  const json = (await response.json()) as SlackResponse;
-  if (!json.ok) throw new ConnectorError(`Slack meldt: ${json.error ?? "onbekende fout"}.`);
-  return { ts: String(json.ts), channel: String(json.channel) };
+  const result = await slackCall(
+    (client) =>
+      client.chat.postMessage({
+        channel: input.channel,
+        text: input.text,
+        ...(input.threadTs ? { thread_ts: input.threadTs } : {}),
+        unfurl_links: false,
+      }),
+    token,
+  );
+  return { ts: String(result.ts), channel: String(result.channel) };
 }
 
 export type SlackMessage = { ts: string; text: string; user: string | null; occurredAt: string };
 
-const toSlackMessage = (m: { ts: string; text?: string; user?: string }): SlackMessage => ({
-  ts: m.ts,
+const toSlackMessage = (m: { ts?: string; text?: string; user?: string }): SlackMessage => ({
+  ts: String(m.ts),
   text: m.text ?? "",
   user: m.user ?? null,
   occurredAt: new Date(Number(m.ts) * 1000).toISOString(),
 });
 
-/** One message from a public channel, by its timestamp. Null when it no longer exists. */
 export async function fetchSlackMessage(token: string, channel: string, ts: string): Promise<SlackMessage | null> {
-  const history = await slack("conversations.history", token, { channel, latest: ts, oldest: ts, inclusive: "true", limit: "1" });
-  const message = ((history.messages ?? []) as { ts: string; text?: string; user?: string; bot_id?: string }[])[0];
+  const history = await slackCall((client) => client.conversations.history({ channel, latest: ts, oldest: ts, inclusive: true, limit: 1 }), token);
+  const message = history.messages?.[0];
   if (!message || message.bot_id || !message.text) return null;
   return toSlackMessage(message);
 }
 
-/** Recent messages in one channel that mention any of the given terms ("terugkijken"). */
 export async function searchSlackHistory(token: string, channel: string, since: Date, terms: string[], max: number): Promise<SlackMessage[]> {
-  const history = await slack("conversations.history", token, {
-    channel,
-    oldest: String(Math.floor(since.getTime() / 1000)),
-    limit: "200",
-  });
+  const history = await slackCall(
+    (client) => client.conversations.history({ channel, oldest: String(Math.floor(since.getTime() / 1000)), limit: 200 }),
+    token,
+  );
   const needles = terms.map((term) => term.toLowerCase());
-  return ((history.messages ?? []) as { ts: string; text?: string; user?: string; subtype?: string; bot_id?: string }[])
+  return (history.messages ?? [])
     .filter((m) => !m.subtype && !m.bot_id && m.text && needles.some((n) => m.text!.toLowerCase().includes(n)))
     .slice(0, max)
     .map(toSlackMessage);
@@ -174,58 +196,38 @@ export async function searchSlackHistory(token: string, channel: string, since: 
 
 export type SlackChannelInfo = { id: string; name: string; isPrivate: boolean; hasExternalMembers: boolean; isMember: boolean };
 
-/** Channel facts the bot needs before it may follow a channel. */
 export async function slackChannelInfo(token: string, channel: string): Promise<SlackChannelInfo> {
-  const info = await slack("conversations.info", token, { channel });
-  const c = info.channel as {
-    id?: string;
-    name?: string;
-    is_private?: boolean;
-    is_im?: boolean;
-    is_mpim?: boolean;
-    is_ext_shared?: boolean;
-    is_org_shared?: boolean;
-    is_shared?: boolean;
-    is_member?: boolean;
-  };
+  const info = await slackCall((client) => client.conversations.info({ channel }), token);
+  const c = info.channel;
   return {
-    id: c.id ?? channel,
-    name: c.name ?? channel,
-    isPrivate: Boolean(c.is_private || c.is_im || c.is_mpim),
-    hasExternalMembers: Boolean(c.is_ext_shared || c.is_shared),
-    isMember: Boolean(c.is_member),
+    id: c?.id ?? channel,
+    name: c?.name ?? channel,
+    isPrivate: Boolean(c?.is_private || c?.is_im || c?.is_mpim),
+    hasExternalMembers: Boolean(c?.is_ext_shared || c?.is_shared),
+    isMember: Boolean(c?.is_member),
   };
 }
 
 export type SlackMember = { id: string; name: string; email: string | null; title: string | null; isGuest: boolean };
 
-/** Full members of the workspace (no bots, no guests, no deactivated accounts). */
 export async function listSlackMembers(token: string): Promise<SlackMember[]> {
   const members: SlackMember[] = [];
-  let cursor = "";
-  for (let page = 0; page < 20; page++) {
-    const result = await slack("users.list", token, { limit: "200", ...(cursor ? { cursor } : {}) });
-    for (const u of (result.members ?? []) as {
-      id: string;
-      deleted?: boolean;
-      is_bot?: boolean;
-      is_restricted?: boolean;
-      is_ultra_restricted?: boolean;
-      real_name?: string;
-      name?: string;
-      profile?: { email?: string; title?: string; real_name?: string };
-    }[]) {
-      if (u.deleted || u.is_bot || u.id === "USLACKBOT") continue;
-      members.push({
-        id: u.id,
-        name: u.profile?.real_name ?? u.real_name ?? u.name ?? u.id,
-        email: u.profile?.email?.toLowerCase() ?? null,
-        title: u.profile?.title || null,
-        isGuest: Boolean(u.is_restricted || u.is_ultra_restricted),
-      });
+  const pages = slackClient(token).paginate("users.list", { limit: 200 });
+  try {
+    for await (const page of pages) {
+      for (const u of (page as UsersListResponse).members ?? []) {
+        if (u.deleted || u.is_bot || !u.id || u.id === "USLACKBOT") continue;
+        members.push({
+          id: u.id,
+          name: u.profile?.real_name ?? u.real_name ?? u.name ?? u.id,
+          email: u.profile?.email?.toLowerCase() ?? null,
+          title: u.profile?.title || null,
+          isGuest: Boolean(u.is_restricted || u.is_ultra_restricted),
+        });
+      }
     }
-    cursor = String((result.response_metadata as { next_cursor?: string } | undefined)?.next_cursor ?? "");
-    if (!cursor) break;
+  } catch (error) {
+    throw slackFailure(error);
   }
   return members;
 }
@@ -243,9 +245,7 @@ export function verifySlackSignature(input: {
   const age = Math.abs((input.now ?? Date.now()) / 1000 - Number(timestamp));
   if (!Number.isFinite(age) || age > 300) return false; // replay protection
   const expected = `v0=${createHmac("sha256", signingSecret).update(`v0:${timestamp}:${rawBody}`).digest("hex")}`;
-  const a = Buffer.from(expected);
-  const b = Buffer.from(signature);
-  return a.length === b.length && timingSafeEqual(a, b);
+  return safeEqual(signature, expected);
 }
 
 // --- Jira -------------------------------------------------------------------

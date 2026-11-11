@@ -1,3 +1,4 @@
+import { addWeeks } from "date-fns";
 import "server-only";
 import { advanceInterview, confirmInterviewSummary } from "@/lib/agents/pipelines";
 import { logSystemAction } from "@/lib/audit";
@@ -247,7 +248,7 @@ export async function handleDirectMessage(input: {
   }
   if (/pauzeer/i.test(text)) {
     const weeks = /week/i.test(text) ? 1 : 4;
-    const until = new Date(Date.now() + weeks * 7 * 86_400_000);
+    const until = addWeeks(new Date(), weeks);
     return steer(
       { contact_paused_until: until.toISOString() },
       `heeft de bot ${weeks === 1 ? "een week" : "een maand"} gepauzeerd.`,

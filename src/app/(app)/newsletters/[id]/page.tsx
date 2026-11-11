@@ -17,7 +17,8 @@ import { NewsletterPreview } from "./_components/preview";
 import { ApprovalRound } from "@/components/redactie/approval-round";
 import { ReadyPanel } from "@/components/redactie/ready-panel";
 import { INTERVIEW_STATUS_META } from "@/lib/constants";
-import { stripHtml } from "@/lib/format";
+import { stripHtml } from "@/lib/html-text";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { loadRound } from "@/lib/redactie/queries";
 import { ComposeMdUpdateButton } from "../_components/md-update-actions";
 import { WorkflowPanel } from "./_components/workflow-panel";
@@ -188,8 +189,8 @@ export default async function NewsletterPage({ params }: { params: Promise<{ id:
               newsletterId={id}
               title={newsletter.title}
               subject={newsletter.subject ?? ""}
-              introHtml={newsletter.intro_html}
-              outroHtml={newsletter.outro_html}
+              introHtml={sanitizeHtml(newsletter.intro_html)}
+              outroHtml={sanitizeHtml(newsletter.outro_html)}
               editable={editable}
             />
           </Panel>
@@ -311,8 +312,8 @@ export default async function NewsletterPage({ params }: { params: Promise<{ id:
               organizationName={session.organization.name}
               monthLabel={monthLabel}
               subject={newsletter.subject ?? ""}
-              introHtml={newsletter.intro_html}
-              outroHtml={newsletter.outro_html}
+              introHtml={sanitizeHtml(newsletter.intro_html)}
+              outroHtml={sanitizeHtml(newsletter.outro_html)}
               items={items}
             />
           </Panel>

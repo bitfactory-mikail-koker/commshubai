@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { initials } from "@/lib/format";
-import { sanitizeHtml } from "@/lib/sanitize";
+import type { SafeHtml } from "@/lib/safe-html";
 import { cn } from "@/lib/utils";
 
 /**
@@ -190,9 +190,9 @@ export function Field({ label, children, className }: { label: string; children:
   );
 }
 
-/** Renders stored editorial HTML (sanitized) with article typography. */
-export function HtmlContent({ html, compact, className }: { html: string | null | undefined; compact?: boolean; className?: string }) {
-  const safe = sanitizeHtml(html).replace(/\[AANVULLEN[^\]]*\]/g, (m) => `<mark class="placeholder-mark">${m}</mark>`);
+/** Renders editorial HTML that has been through sanitizeHtml, which the SafeHtml type guarantees. */
+export function HtmlContent({ html, compact, className }: { html: SafeHtml; compact?: boolean; className?: string }) {
+  const safe = html.replace(/\[AANVULLEN[^\]]*\]/g, (m) => `<mark class="placeholder-mark">${m}</mark>`);
   return (
     <div
       className={cn("prose-editorial", compact && "prose-compact", className)}

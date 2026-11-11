@@ -1,7 +1,7 @@
-import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { runDueJobs } from "@/lib/agents/tasks";
 import { env } from "@/lib/env";
+import { safeEqual } from "@/lib/secure-compare";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -19,9 +19,7 @@ function authorized(request: NextRequest): boolean {
   const secret = env.cronSecret;
   if (!secret) return false;
   const header = request.headers.get("authorization") ?? "";
-  const expected = Buffer.from(`Bearer ${secret}`);
-  const actual = Buffer.from(header);
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
+  return safeEqual(header, `Bearer ${secret}`);
 }
 
 async function handle(request: NextRequest) {

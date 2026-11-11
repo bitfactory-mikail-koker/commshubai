@@ -1,4 +1,6 @@
-import { stripHtml } from "@/lib/format";
+import escapeRegExp from "escape-string-regexp";
+import { parse, TextNode, type Node } from "node-html-parser";
+import { stripHtml } from "@/lib/html-text";
 
 /**
  * Finding someone's own words in a text. Used to decide whose consent a piece
@@ -15,16 +17,11 @@ export function normalizeQuote(text: string): string {
     .trim();
 }
 
-/** Text of every <blockquote> in a body, without markup. */
 export function blockquotes(bodyHtml: string): string[] {
-  const out: string[] = [];
-  const re = /<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(bodyHtml))) {
-    const text = stripHtml(match[1]).trim();
-    if (text) out.push(text);
-  }
-  return out;
+  return parse(bodyHtml)
+    .querySelectorAll("blockquote")
+    .map((quote) => stripHtml(quote.innerHTML).trim())
+    .filter(Boolean);
 }
 
 export type Speaker = {
@@ -80,16 +77,11 @@ export function attributeQuotes(bodyHtml: string, speakers: Speaker[]): Attribut
   return found;
 }
 
-const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function textNodes(node: Node): TextNode[] {
+  return node.childNodes.flatMap((child) => (child instanceof TextNode ? [child] : textNodes(child)));
+}
 
-/**
- * Wraps the given quotes in <mark class="quote-mark"> inside sanitized HTML.
- * Only text between tags is touched, so markup and attributes stay as they
- * are; a quote that runs across inline markup is left unmarked. Matching
- * ignores the kind of quotation marks and whitespace.
- */
 export function highlightQuotes(bodyHtml: string, quotes: string[]): string {
-  // Punctuation and quotation marks may differ between the stored quote and the text; words may not.
   const patterns = quotes
     .map((quote) =>
       quote
@@ -98,46 +90,41 @@ export function highlightQuotes(bodyHtml: string, quotes: string[]): string {
         .split(/\s+/)
         .map((word) => word.replace(/^[.,;:!?]+|[.,;:!?]+$/g, ""))
         .filter(Boolean)
-        .map(escapeRegExp),
+        .map((word) => escapeRegExp(word)),
     )
     .filter((words) => words.length >= 3)
     .map((words) => new RegExp(words.join("[\\s“”„\"‘’«».,;:!?]+"), "i"));
   if (patterns.length === 0) return bodyHtml;
 
-  return bodyHtml
-    .split(/(<[^>]+>)/)
-    .map((segment) => {
-      if (segment.startsWith("<")) return segment;
-      let text = segment;
-      for (const pattern of patterns) text = text.replace(pattern, (match) => `<mark class="quote-mark">${match}</mark>`);
-      return text;
-    })
-    .join("");
+  const root = parse(bodyHtml);
+  for (const node of textNodes(root)) {
+    let text = node.rawText;
+    for (const pattern of patterns) text = text.replace(pattern, (match) => `<mark class="quote-mark">${match}</mark>`);
+    if (text !== node.rawText) node.parentNode?.exchangeChild(node, parse(text));
+  }
+  return root.toString();
 }
 
-/** Removes the block quote (or sentence) that carries a quote. Returns null when it is not found. */
 export function removeQuote(bodyHtml: string, quote: string): string | null {
   const target = normalizeQuote(quote);
   if (!target) return null;
   const core = target.slice(0, Math.max(16, Math.floor(target.length * 0.7)));
 
-  let removed = false;
-  let html = bodyHtml.replace(/<blockquote[^>]*>[\s\S]*?<\/blockquote>/gi, (block) => {
-    if (!removed && normalizeQuote(stripHtml(block)).includes(core)) {
-      removed = true;
-      return "";
-    }
-    return block;
-  });
-  if (removed) return html;
+  const root = parse(bodyHtml);
+  const block = root.querySelectorAll("blockquote").find((candidate) => normalizeQuote(stripHtml(candidate.innerHTML)).includes(core));
+  if (block) {
+    block.remove();
+    return root.toString();
+  }
 
-  // Not a block quote: drop the sentence that contains the quote.
-  html = bodyHtml.replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, (paragraph, inner: string) => {
-    if (removed || !normalizeQuote(stripHtml(inner)).includes(core)) return paragraph;
-    const sentences = inner.split(/(?<=[.!?][”"’]?)\s+/);
+  for (const paragraph of root.querySelectorAll("p")) {
+    if (!normalizeQuote(stripHtml(paragraph.innerHTML)).includes(core)) continue;
+    const sentences = paragraph.innerHTML.split(/(?<=[.!?][”"’]?)\s+/);
     const kept = sentences.filter((sentence) => !normalizeQuote(stripHtml(sentence)).includes(core.slice(0, 24)));
-    removed = kept.length !== sentences.length;
-    return kept.length > 0 ? `<p>${kept.join(" ")}</p>` : "";
-  });
-  return removed ? html : null;
+    if (kept.length === sentences.length) continue;
+    if (kept.length > 0) paragraph.set_content(kept.join(" "));
+    else paragraph.remove();
+    return root.toString();
+  }
+  return null;
 }

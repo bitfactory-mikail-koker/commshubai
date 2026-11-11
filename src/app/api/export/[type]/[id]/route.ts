@@ -1,7 +1,8 @@
 import { getSession } from "@/lib/auth";
-import { escapeHtml, stripHtml } from "@/lib/format";
+import { escapeHtml, stripHtml } from "@/lib/html-text";
 import { htmlToParagraphs } from "@/lib/redactie/diff";
 import { sanitizeHtml } from "@/lib/sanitize";
+import { toSlug } from "@/lib/slug";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -13,13 +14,7 @@ export const dynamic = "force-dynamic";
  */
 const READY = ["approved", "scheduled", "published", "sent"];
 
-const slug = (value: string) =>
-  value
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60) || "stuk";
+const slug = (value: string) => toSlug(value, { maxLength: 60, fallback: "stuk" });
 
 function htmlDocument(title: string, body: string): string {
   return `<!doctype html>

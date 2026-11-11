@@ -8,7 +8,7 @@ import { Notice } from "@/components/shared/layout";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { wordCount } from "@/lib/format";
+import { fromEditor } from "@/lib/safe-html";
 import { cn } from "@/lib/utils";
 import { ChannelPreview } from "./channel-preview";
 import { CommentsTab } from "./comments-tab";
@@ -46,12 +46,13 @@ export function EditorWorkspace({
   const [title, setTitle] = useState(article.title);
   const [subtitle, setSubtitle] = useState(article.subtitle ?? "");
   const [html, setHtml] = useState(article.bodyHtml);
+  const [words, setWords] = useState(article.words);
+  const [text, setText] = useState(article.text);
   const [changeSummary, setChangeSummary] = useState("");
   const [selection, setSelection] = useState("");
 
   const editable = readOnlyReason === null;
   const dirty = editable && (title !== article.title || subtitle !== (article.subtitle ?? "") || html !== article.bodyHtml);
-  const words = wordCount(html);
   const openComments = comments.filter((c) => !c.resolved && !c.parent_id).length;
 
   // Warn before leaving the page with unsaved text.
@@ -146,7 +147,12 @@ export function EditorWorkspace({
             </FormField>
           </div>
 
-          <RichTextEditor value={article.bodyHtml} editable={editable} onChange={setHtml} onSelectionChange={setSelection} />
+          <RichTextEditor value={article.bodyHtml} editable={editable} onChange={(next) => {
+              setHtml(next.html);
+              setText(next.text);
+              setWords(next.words);
+            }}
+            onSelectionChange={setSelection} />
 
           {editable && (
             <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 sm:flex-row sm:items-end">
@@ -182,7 +188,8 @@ export function EditorWorkspace({
           contentType={article.contentType}
           title={title}
           subtitle={subtitle}
-          html={html}
+          html={fromEditor(html)}
+          text={text}
           organizationName={organizationName}
           authorName={authorName}
           date={article.publishedAt ?? article.publishAt}
