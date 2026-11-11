@@ -4,6 +4,7 @@ import { ErrorCode, WebClient, type ConversationsHistoryResponse, type UsersList
 import type { MessageElement } from "@slack/web-api/dist/types/response/ConversationsHistoryResponse";
 import pLimit from "p-limit";
 import { env } from "@/lib/env";
+import { guardedFetch, OutboundBlockedError, type OutboundInit, type OutboundResponse } from "@/lib/integrations/outbound";
 import { safeEqual } from "@/lib/secure-compare";
 import type { IntegrationProvider, SourceKind } from "@/lib/types";
 
@@ -35,12 +36,14 @@ export class ConnectorError extends Error {
 
 const TIMEOUT_MS = 12_000;
 
-async function request(url: string, init: RequestInit = {}): Promise<Response> {
+async function request(url: string, init: OutboundInit = {}): Promise<OutboundResponse> {
   try {
-    return await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS), cache: "no-store" });
+    return await guardedFetch(url, init, TIMEOUT_MS);
   } catch (error) {
+    const blocked = error instanceof OutboundBlockedError ? error : error instanceof Error && error.cause instanceof OutboundBlockedError ? error.cause : null;
+    if (blocked) throw new ConnectorError(blocked.message, { cause: blocked });
     const reason = error instanceof Error && error.name === "TimeoutError" ? "geen antwoord binnen 12 seconden" : "host niet bereikbaar";
-    throw new ConnectorError(`Verbinding mislukt: ${reason}.`);
+    throw new ConnectorError(`Verbinding mislukt: ${reason}.`, { cause: error });
   }
 }
 

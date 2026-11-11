@@ -45,6 +45,7 @@ const set = {
   INTEGRATION_ENCRYPTION_KEY: randomBytes(32).toString("base64"),
   CRON_SECRET: randomBytes(24).toString("hex"),
   INBOUND_MAIL_SECRET: randomBytes(24).toString("hex"),
+  INTEGRATION_ALLOW_PRIVATE_HOSTS: "true",
 };
 const output = template
   .split("\n")
