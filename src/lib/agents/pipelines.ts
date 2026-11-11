@@ -600,7 +600,7 @@ async function loadInterview(rt: AgentRuntime, interviewId: string) {
   if (!interview) throw new Error("Interview niet gevonden.");
   const { data: messages } = await rt.db
     .from("interview_messages")
-    .select("*")
+    .select("content, created_at, id, interview_id, question_id, role")
     .eq("interview_id", interviewId)
     .order("created_at", { ascending: true });
   const transcript: TranscriptEntry[] = (messages ?? []).map((m) => ({
@@ -883,7 +883,7 @@ async function collectArticleMaterial(rt: AgentRuntime, article: Article) {
 
   // Interviews held for this item, plus the one it explicitly references
   // (channel variants reuse the interview of the original item).
-  let interviewQuery = rt.db.from("interviews").select("*").eq("organization_id", rt.orgId);
+  let interviewQuery = rt.db.from("interviews").select("article_id, classification, id, interviewee_name, interviewee_profile_id, interviewee_role, invite_choice, is_demo, organization_id, questions, redirect_to, reminded_at, status, summary, summary_confirmed_at, title").eq("organization_id", rt.orgId);
   interviewQuery = article.interview_id
     ? interviewQuery.or(`article_id.eq.${article.id},id.eq.${article.interview_id}`)
     : interviewQuery.eq("article_id", article.id);

@@ -32,9 +32,9 @@ export default async function GroupsPage() {
   const db = await createClient();
 
   const [groupsResult, membersResult, rhythmsResult, rolesResult, assignmentsResult, teamsResult, peopleResult] = await Promise.all([
-    db.from("outreach_groups").select("*").order("name"),
+    db.from("outreach_groups").select("after_no_reply, bureau, enabled, frequency, functional_role_id, goal, id, last_run_at, member_kind, name, reminder_after_days, reminder_count, team_id, weekday, window_end, window_start").order("name"),
     db.from("outreach_group_members").select("group_id, profile_id"),
-    db.from("rhythms").select("*"),
+    db.from("rhythms").select("days_of_month, deadline_days, enabled, group_id, id, key, last_run_at, name, time_of_day, weekday"),
     db.from("functional_roles").select("id, name").order("sort_order").order("name"),
     db.from("profile_functional_roles").select("profile_id, functional_role_id"),
     db.from("teams").select("id, name").order("name"),

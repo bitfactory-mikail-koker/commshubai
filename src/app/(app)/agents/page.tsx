@@ -33,6 +33,8 @@ import { cn } from "@/lib/utils";
 import { AGENT_MESSAGE_SELECT, AgentMessageList, type AgentMessageWithAgents } from "../_components/agent-messages";
 import { AgentConfigDialog } from "./_components/agent-config-dialog";
 
+type AgentRow = Omit<Agent, "approval_requirements" | "created_at" | "updated_at" | "organization_id">;
+
 export const metadata: Metadata = { title: "AI-agents" };
 
 const TABS = [
@@ -95,7 +97,7 @@ function duration(start: string, end: string | null): string {
   return `${Math.floor(ms / 60_000)} min ${Math.round((ms % 60_000) / 1000)} s`;
 }
 
-function AgentCard({ agent, canManage }: { agent: Agent; canManage: boolean }) {
+function AgentCard({ agent, canManage }: { agent: AgentRow; canManage: boolean }) {
   const kind = agent.kind;
   const config = fromJson<Record<string, unknown>>(agent.config, {});
   const available = TOOLS.filter((t) => t.availableTo.includes(kind));
@@ -261,7 +263,7 @@ export default async function AgentsPage({
   const ai = aiStatus();
   const db = await createClient();
 
-  const { data: agentRows, error } = await db.from("agents").select("*").order("kind", { ascending: false });
+  const { data: agentRows, error } = await db.from("agents").select("allowed_sources, allowed_tools, config, description, id, kind, last_run_at, mission, name, status").order("kind", { ascending: false });
   if (error) throw new Error(error.message);
   const agents = agentRows ?? [];
 

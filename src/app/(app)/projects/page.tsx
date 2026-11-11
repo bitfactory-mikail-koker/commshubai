@@ -12,6 +12,8 @@ import type { ExternalNaming, Project } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ProjectDialog, type ChannelOption, type EditableProject, type RoleOption } from "./_components/project-dialog";
 
+type ProjectRow = Omit<Project, "created_at" | "updated_at" | "organization_id" | "confirmed_by" | "confirmed_at">;
+
 export const metadata: Metadata = { title: "Projecten" };
 
 type Member = { profileId: string; name: string; jobTitle: string | null; role: string; confirmed: boolean };
@@ -28,7 +30,7 @@ export default async function ProjectsPage({
 
   const db = await createClient();
   const [projectResult, memberResult, { data: channelData }, { data: roleData }] = await Promise.all([
-    db.from("projects").select("*").order("name"),
+    db.from("projects").select("anonymous_label, client_name, external_naming, id, is_demo, name, notes, proposed_by_bot, status").order("name"),
     db
       .from("project_members")
       .select("project_id, profile_id, project_role, confirmed, profile:profiles!project_members_profile_id_fkey(full_name, job_title)"),
@@ -64,7 +66,7 @@ export default async function ProjectsPage({
       name: c.name,
       linkedTo: c.project_id && c.project_id !== projectId ? (nameOfProject.get(c.project_id) ?? null) : null,
     }));
-  const editable = (project: Project): EditableProject => ({
+  const editable = (project: ProjectRow): EditableProject => ({
     id: project.id,
     name: project.name,
     clientName: project.client_name ?? "",
@@ -74,7 +76,7 @@ export default async function ProjectsPage({
     members: membersOf(project.id).map(({ profileId, name, jobTitle, role }) => ({ profileId, name, jobTitle, role })),
     channelIds: channelsOf(project.id).map((c) => c.id),
   });
-  const mayEdit = (project: Project) => editorial || membersOf(project.id).some((m) => m.profileId === session.userId);
+  const mayEdit = (project: ProjectRow) => editorial || membersOf(project.id).some((m) => m.profileId === session.userId);
 
   const proposed = projects.filter((p) => p.status === "proposed");
   const archived = projects.filter((p) => p.status === "archived");

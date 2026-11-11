@@ -487,7 +487,7 @@ export async function processApprovalDeadlines(organizationId: string, now = new
   const db = createAdminClient();
   const { data: open } = await db
     .from("approvals")
-    .select("*")
+    .select("base_version, decision, due_at, eligible_profile_ids, entity_id, entity_type, escalated_at, id, item_id, kind, organization_id, quote_text, reminded_at, requested_at, requested_by_agent_id, requested_by_profile_id, scope, step, step_label, version")
     .eq("organization_id", organizationId)
     .eq("decision", "pending")
     .order("requested_at", { ascending: true })

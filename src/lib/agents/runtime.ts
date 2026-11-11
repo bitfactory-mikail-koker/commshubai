@@ -151,7 +151,7 @@ export class AgentRuntime {
     if (ids.length === 0) return [];
     const { data, error } = await this.db
       .from("source_messages")
-      .select("*")
+      .select("id, source, channel, author_name, title, body, occurred_at, url, metadata")
       .eq("organization_id", this.orgId)
       .in("id", ids)
       .in("source", this.allowedSources)
@@ -231,7 +231,9 @@ export async function withRun<T extends Record<string, unknown>>(
   }
 }
 
-export function toSourceMaterial(m: SourceMessage): SourceMaterial {
+export type SourceMessageContent = Pick<SourceMessage, "id" | "source" | "channel" | "author_name" | "title" | "body" | "occurred_at" | "url" | "metadata">;
+
+export function toSourceMaterial(m: SourceMessageContent): SourceMaterial {
   return {
     id: m.id,
     source: m.source as SourceKind,

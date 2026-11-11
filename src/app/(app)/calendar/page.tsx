@@ -15,6 +15,8 @@ import type { CalendarEntry } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AddDeadlineDialog } from "./_components/add-deadline-dialog";
 
+type CalendarRow = Omit<CalendarEntry, "created_by" | "created_at" | "updated_at" | "organization_id">;
+
 export const metadata: Metadata = { title: "Contentkalender" };
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -40,9 +42,9 @@ const TYPE_ICONS: Record<string, LucideIcon> = {
   deadline: Flag,
 };
 
-type Entry = CalendarEntry & { dayKey: string; time: string; href: string | null };
+type Entry = CalendarRow & { dayKey: string; time: string; href: string | null };
 
-function entryHref(entry: CalendarEntry): string | null {
+function entryHref(entry: CalendarRow): string | null {
   if (!entry.entity_id) return null;
   switch (entry.entity_type) {
     case "article":
@@ -83,7 +85,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const to = new Date(Date.UTC(gridEnd.getFullYear(), gridEnd.getMonth(), gridEnd.getDate() + 2));
   const { data, error } = await db
     .from("content_calendar")
-    .select("*")
+    .select("classification, entity_id, entity_type, entry_type, id, notes, starts_at, status, title")
     .gte("starts_at", from.toISOString())
     .lt("starts_at", to.toISOString())
     .order("starts_at", { ascending: true });

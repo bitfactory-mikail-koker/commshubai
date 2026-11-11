@@ -173,7 +173,7 @@ export async function publishDueContent(organizationId: string): Promise<{ artic
 
   const { data: dueArticles } = await db
     .from("articles")
-    .select("*")
+    .select("id, organization_id, classification, current_version, external_permission, title, subtitle, excerpt, body_html, content_type, tags, publish_at")
     .eq("organization_id", organizationId)
     .eq("status", "scheduled")
     .lte("publish_at", now);

@@ -493,7 +493,7 @@ export async function runDueRhythms(organizationId: string, now = new Date()): P
   const errors: string[] = [];
   if (settings.botPaused) return { ran, explained: 0, errors };
 
-  const { data: rhythms } = await db.from("rhythms").select("*").eq("organization_id", organizationId).eq("enabled", true);
+  const { data: rhythms } = await db.from("rhythms").select("days_of_month, deadline_days, enabled, group_id, id, key, last_run_at, name, time_of_day, weekday").eq("organization_id", organizationId).eq("enabled", true);
   for (const rhythm of rhythms ?? []) {
     if (!rhythmIsDue(rhythm, now)) continue;
     try {

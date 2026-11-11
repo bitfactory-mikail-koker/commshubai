@@ -71,7 +71,7 @@ export async function processSourceMessages(options: {
       rt.use("read_sources");
       let query = rt.db
         .from("source_messages")
-        .select("*")
+        .select("author_name, author_profile_id, body, channel, channel_id, excluded, id, is_demo, metadata, occurred_at, slack_ts, source, title, url")
         .eq("organization_id", rt.orgId)
         .order("occurred_at", { ascending: true })
         .limit(25);
