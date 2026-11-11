@@ -347,6 +347,58 @@ async function main() {
     const { data: longQuery } = await admin.db.rpc("search_all", { p_tsquery: Array.from({ length: 200 }, () => "klant:*").join(" & "), p_like: "%klant%" });
     check("an over-long query returns nothing instead of running", Object.keys((longQuery as unknown as SearchResponse | null)?.counts ?? {}).length === 0);
 
+    const { data: indexedForEmployee } = await employee.db.from("search_index").select("kind, entity_id").eq("kind", "article");
+    check(
+      "an employee reading the search index directly only sees articles they can open",
+      (indexedForEmployee ?? []).length > 0 && (indexedForEmployee ?? []).every((row) => visible.has(row.entity_id)),
+      `${(indexedForEmployee ?? []).length} indexed, ${visible.size} visible`,
+    );
+    const { data: indexedComments } = await employee.db.from("search_index").select("entity_id").eq("kind", "comment");
+    const ownComments = new Set((employeeComments ?? []).map((comment) => (comment as { id?: string }).id));
+    const { data: readableComments } = await employee.db.from("comments").select("id");
+    const readableIds = new Set((readableComments ?? []).map((comment) => comment.id));
+    check(
+      "the search index shows an employee no comment they cannot read",
+      (indexedComments ?? []).every((row) => readableIds.has(row.entity_id)) && ownComments.size >= 0,
+    );
+    const { data: outsiderIndex } = await outsider.db.from("search_index").select("entity_id").eq("kind", "article");
+    const outsiderArticles = new Set(((await outsider.db.from("articles").select("id")).data ?? []).map((article) => article.id));
+    check("another organization only sees its own indexed articles", (outsiderIndex ?? []).every((row) => outsiderArticles.has(row.entity_id)));
+    const { error: indexWrite } = await admin.db.from("search_index").insert({ kind: "article", entity_id: crypto.randomUUID(), organization_id: noordlicht, doc: "x", like_text: "x" } as never);
+    check("nobody can write to the search index directly", Boolean(indexWrite));
+
+    const { count: unindexedArticles } = await service
+      .from("articles")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", noordlicht);
+    const { count: indexedArticles } = await service
+      .from("search_index")
+      .select("entity_id", { count: "exact", head: true })
+      .eq("organization_id", noordlicht)
+      .eq("kind", "article");
+    check("every article is in the search index", unindexedArticles === indexedArticles && (indexedArticles ?? 0) > 0, `${unindexedArticles} articles, ${indexedArticles} indexed`);
+
+    const marker = `zeldzaamwoord${Date.now()}`;
+    const { data: firstArticle } = await service.from("articles").select("id, title").eq("organization_id", noordlicht).limit(1).single();
+    const originalTitle = firstArticle!.title;
+    await service.from("articles").update({ title: `${originalTitle} ${marker}` }).eq("id", firstArticle!.id);
+    const { response: afterRename } = await run(admin.db, `${marker}:*`, `%${marker}%`);
+    check("a renamed article is found under its new title straight away", (afterRename?.rows ?? []).some((row) => row.id === firstArticle!.id));
+    await service.from("articles").update({ title: originalTitle }).eq("id", firstArticle!.id);
+    const { response: afterRevert } = await run(admin.db, `${marker}:*`, `%${marker}%`);
+    check("the old title stops matching after the rename is undone", (afterRevert?.rows ?? []).length === 0);
+
+    const { data: tempComment } = await service
+      .from("comments")
+      .insert({ organization_id: noordlicht, entity_type: "article", entity_id: firstArticle!.id, body: `tijdelijk ${marker}` })
+      .select("id")
+      .single();
+    const { response: withComment } = await run(admin.db, `${marker}:*`, `%${marker}%`);
+    check("a new comment is searchable at once", (withComment?.rows ?? []).some((row) => row.id === tempComment!.id));
+    await service.from("comments").delete().eq("id", tempComment!.id);
+    const { response: withoutComment } = await run(admin.db, `${marker}:*`, `%${marker}%`);
+    check("a deleted comment disappears from search", (withoutComment?.rows ?? []).length === 0);
+
     const { error: anonymous } = await anon.rpc("search_all", { p_tsquery: "klant:*", p_like: "%klant%" });
     check("anonymous users cannot call search", Boolean(anonymous));
   }
