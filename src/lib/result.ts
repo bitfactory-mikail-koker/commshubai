@@ -1,4 +1,6 @@
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
+
+z.config(z.locales.nl());
 
 export type ActionResult<T = undefined> =
   | { ok: true; message?: string; data: T }
@@ -38,6 +40,27 @@ export function toUserMessage(error: unknown): string {
   }
   if (/cannot change your own role/i.test(raw)) {
     return "Je kunt je eigen rol of status niet wijzigen.";
+  }
+  if (/does not belong to the organization/i.test(raw)) {
+    return "Deze rol of dit team hoort niet bij de organisatie van deze persoon.";
+  }
+  if (/cannot be moved between organizations/i.test(raw)) {
+    return "Mensen kunnen niet naar een andere organisatie worden verplaatst.";
+  }
+  if (/decision cannot be reset/i.test(raw)) {
+    return "Een vastgelegd besluit kan niet worden teruggedraaid.";
+  }
+  if (/topic is internal only/i.test(raw)) {
+    return "Dit onderwerp is alleen intern. Een redacteur moet het eerst vrijgeven voor extern gebruik.";
+  }
+  if (/assigned to someone else/i.test(raw)) {
+    return "Dit verzoek ligt bij iemand anders. De redactie kan beslissen zodra de termijn is verstreken.";
+  }
+  if (/only the person quoted/i.test(raw)) {
+    return "Alleen de geciteerde persoon kan over het eigen citaat beslissen.";
+  }
+  if (/cannot be created as/i.test(raw)) {
+    return "Dit kan niet direct met deze status worden aangemaakt: er is eerst menselijke goedkeuring nodig.";
   }
   if (/duplicate key|already exists|already been registered/i.test(raw)) {
     return "Dit bestaat al.";
