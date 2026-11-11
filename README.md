@@ -287,6 +287,23 @@ npm run test:e2e          # Playwright; needs `npm run dev` running. E2E_BASE_UR
 The database tests and the end-to-end tests change demo data; run `npm run db:seed` afterwards. Before the first
 end-to-end run, install the browser once with `npx playwright install chromium`.
 
+## Registration, e-mail confirmation and outgoing requests
+
+- A new organization is only usable after the owner clicks the link in the confirmation e-mail, so nobody can claim someone
+  else's address. Locally the mail arrives in Mailpit (http://127.0.0.1:54324). On a hosted Supabase project, switch on
+  **Confirm email** (Authentication, Providers, Email) and paste `supabase/templates/confirmation.html` as the **Confirm
+  signup** template; `config.toml` only configures the local stack. The link points at `/auth/confirm`.
+- Webhook (CMS) and Jira URLs must be public `https` hosts. Internal and cloud metadata addresses, credentials in the URL and
+  redirects are refused, also when a name resolves to an internal address. `INTEGRATION_ALLOW_PRIVATE_HOSTS=true` lifts
+  this for local development only; `npm run setup:env` sets it, `.env.example` leaves it off.
+
+## Search
+
+Search runs in the database (`search_all`). `search_index` holds one full-text row per signal, topic, piece, interview, answer,
+edition, post, project, person, source message and comment, kept up to date by triggers and readable only for records the
+reader may open. On 50,000 extra source messages a common word takes about 0.35 s (it took 4.7 s before the index). Press
+Ctrl or Cmd+K for the modal; the `/search` page shows everything with filters.
+
 ## Deploying
 
 1. Create a Supabase project, then `npx supabase link` and `npx supabase db push`.
