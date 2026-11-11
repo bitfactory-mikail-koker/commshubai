@@ -148,7 +148,7 @@ export default async function EditorialPage({ searchParams }: { searchParams: Pr
               href={href({ archief: showArchived ? null : "1" })}
               scroll={false}
               className={cn(
-                "inline-flex h-8 items-center rounded-full border px-3 text-[0.8125rem] font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                "inline-flex h-8 items-center rounded-md border px-3 text-[0.8125rem] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 showArchived ? "border-foreground/40 bg-muted text-foreground" : "bg-card text-muted-foreground hover:text-foreground",
               )}
             >
@@ -213,7 +213,7 @@ export default async function EditorialPage({ searchParams }: { searchParams: Pr
           />
         </Panel>
       ) : view === "board" ? (
-        <div className="-mx-4 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
+        <div className="board-scroll -mx-4 overflow-x-auto px-4 pb-3 sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10" tabIndex={0} role="region" aria-label="Bord met stappen, scroll horizontaal voor meer">
           <div className="flex min-w-max gap-4">
             {stages.map((stage) => {
               const items = filtered.filter((a) => stage.statuses.includes(a.status));

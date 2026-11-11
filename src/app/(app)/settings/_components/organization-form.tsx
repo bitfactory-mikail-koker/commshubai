@@ -73,7 +73,7 @@ export function OrganizationForm({ initial, canManage }: { initial: Values; canM
         </FormField>
       </div>
 
-      <div className="flex items-start justify-between gap-6 rounded-lg border p-4">
+      <div className="flex items-start justify-between gap-6 border-y py-4">
         <div className="space-y-1">
           <Label htmlFor="four-eyes" className="text-sm font-medium">
             Vier-ogenprincipe

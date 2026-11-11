@@ -131,6 +131,25 @@
   color: var(--foreground);
 }
 
+.board-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted-foreground) transparent;
+}
+
+.board-scroll::-webkit-scrollbar {
+  height: 10px;
+}
+
+.board-scroll::-webkit-scrollbar-thumb {
+  background: var(--muted-foreground);
+  border-radius: 999px;
+  border: 2px solid var(--background);
+}
+
+.board-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 .dark {
   --background: oklch(0.172 0.012 264);
   --foreground: oklch(0.945 0.006 264);

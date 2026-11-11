@@ -157,7 +157,7 @@ export default async function SettingsPage() {
               ))}
             </ul>
 
-            <div className="space-y-2 rounded-lg border bg-muted/30 p-4 text-[0.8125rem] leading-relaxed">
+            <div className="space-y-2 border-t pt-4 text-[0.8125rem] leading-relaxed">
               <p className="font-medium">Zo worden taken gestart</p>
               <p className="text-muted-foreground">
                 Laat een cron-dienst periodiek (bijvoorbeeld elke vijf minuten){" "}

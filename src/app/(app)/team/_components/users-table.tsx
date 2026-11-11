@@ -79,7 +79,7 @@ function UserRow({
 
   return (
     <TableRow className={cn(!user.isActive && "bg-muted/30")}>
-      <TableCell className="py-3 pl-5">
+      <TableCell className="max-w-64 py-3 pl-5">
         <div className="flex items-center gap-3">
           <UserAvatar name={user.name} color={user.avatarColor} className={cn(!user.isActive && "opacity-50")} />
           <div className="min-w-0">
@@ -88,19 +88,20 @@ function UserRow({
               {isSelf && <span className="ml-1.5 text-xs font-normal text-muted-foreground">(jij)</span>}
             </p>
             <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+            {user.jobTitle && <p className="truncate text-xs text-muted-foreground min-[1700px]:hidden">{user.jobTitle}</p>}
           </div>
         </div>
       </TableCell>
-      <TableCell className="text-[0.8125rem]">
+      <TableCell className="hidden text-[0.8125rem] min-[1700px]:table-cell">
         {user.jobTitle ?? <span className="text-muted-foreground">-</span>}
         {user.department && <span className="block text-xs text-muted-foreground">{user.department}</span>}
       </TableCell>
-      <TableCell className="text-[0.8125rem]">
+      <TableCell className="max-w-44 text-[0.8125rem]">
         {roleNames.length > 0 ? roleNames.join(", ") : <span className="text-muted-foreground">Geen rol</span>}
         <span className="block text-xs text-muted-foreground">{teamName ? `Team ${teamName}` : "Geen team"}</span>
       </TableCell>
       {showBot && (
-        <TableCell className="text-[0.8125rem]">
+        <TableCell className="max-w-44 text-[0.8125rem]">
           {bot.held ? <ToneBadge tone="slate">{bot.label}</ToneBadge> : bot.label}
           {botExtras.length > 0 && <span className="block text-xs text-muted-foreground">{botExtras.join(" · ")}</span>}
         </TableCell>
@@ -191,7 +192,7 @@ export function UsersTable({
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             <TableHead className="pl-5">Persoon</TableHead>
-            <TableHead>Functie</TableHead>
+            <TableHead className="hidden min-[1700px]:table-cell">Functie</TableHead>
             <TableHead>Rollen en team</TableHead>
             {showBot && <TableHead>Bot</TableHead>}
             <TableHead>Toegang</TableHead>
