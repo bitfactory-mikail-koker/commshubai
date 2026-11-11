@@ -50,6 +50,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { SearchBox } from "@/components/shell/search-box";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
@@ -243,6 +244,9 @@ function SidebarBody({ groups, organizationName, user, ai, bot, onNavigate }: Om
     <>
       <div className="p-2">
         <Brand organizationName={organizationName} />
+      </div>
+      <div className="px-2 pb-1">
+        <SearchBox onNavigate={onNavigate} shortcut={!onNavigate} />
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-2">
         <NavList groups={groups} onNavigate={onNavigate} />

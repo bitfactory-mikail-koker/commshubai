@@ -286,6 +286,46 @@ async function main() {
     check("approval rules are isolated per organization", (foreignRules ?? []).length === 0);
   }
 
+  console.log("\nSearch");
+  {
+    type SearchResponse = { counts: Record<string, number>; rows: { kind: string; id: string; title: string; snippet: string }[] };
+    const run = async (db: Db, tsquery: string, like: string, kind?: string) => {
+      const { data, error } = await db.rpc("search_all", { p_tsquery: tsquery, p_like: like, p_kind: kind, p_limit: 50, p_offset: 0 });
+      return { response: data as unknown as SearchResponse | null, error };
+    };
+
+    const { response: found } = await run(admin.db, "klant:*", "%klant%");
+    check("an administrator finds content about klanten", (found?.rows ?? []).length > 0, JSON.stringify(found?.counts));
+    check("results span more than one kind", Object.keys(found?.counts ?? {}).length > 1, JSON.stringify(found?.counts));
+
+    const { response: prefix } = await run(admin.db, "kla:*", "%kla%");
+    check("a word prefix matches", (prefix?.rows ?? []).length > 0);
+
+    const { response: substring } = await run(admin.db, "zzzxqq:*", "%lant%");
+    check("a part inside a word matches through the substring fallback", (substring?.rows ?? []).length > 0);
+
+    const { response: none } = await run(admin.db, "zzzxqq:*", "%zzzxqq%");
+    check("a nonsense query finds nothing", (none?.rows ?? []).length === 0);
+
+    const { response: foreign } = await run(outsider.db, "klant:*", "%klant%");
+    check("an administrator of another organization finds none of it", (foreign?.rows ?? []).length === 0, JSON.stringify(foreign?.counts));
+
+    const { response: kindOnly } = await run(admin.db, "klant:*", "%klant%", "article");
+    check("a kind filter returns only that kind", (kindOnly?.rows ?? []).every((row) => row.kind === "article"));
+
+    const { response: logbook } = await run(employee.db, "ingelogd:*", "%ingelogd%");
+    check("search never returns audit log entries", (logbook?.rows ?? []).every((row) => row.kind !== "audit"));
+
+    const { response: employeeFound } = await run(employee.db, "klant:*", "%klant%");
+    const { data: visibleArticles } = await employee.db.from("articles").select("id");
+    const visible = new Set((visibleArticles ?? []).map((article) => article.id));
+    const articleHits = (employeeFound?.rows ?? []).filter((row) => row.kind === "article");
+    check("an employee only finds articles that row level security shows them", articleHits.every((row) => visible.has(row.id)));
+
+    const { error: anonymous } = await anon.rpc("search_all", { p_tsquery: "klant:*", p_like: "%klant%" });
+    check("anonymous users cannot call search", Boolean(anonymous));
+  }
+
   console.log(`\n${passed} geslaagd, ${failed} mislukt`);
   process.exit(failed === 0 ? 0 : 1);
 }

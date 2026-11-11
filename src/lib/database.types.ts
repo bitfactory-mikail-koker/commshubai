@@ -1419,6 +1419,9 @@ isOneToOne: false
                            },
 "is_project_member":
 { Args: { "p_project_id": string }; Returns: boolean
+                           },
+"search_all":
+{ Args: { "p_kind"?: string,"p_like": string,"p_limit"?: number,"p_offset"?: number,"p_tsquery": string }; Returns: Json
                            }
           }
           Enums: {
