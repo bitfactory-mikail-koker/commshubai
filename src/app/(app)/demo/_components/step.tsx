@@ -52,7 +52,7 @@ export function Step({
               "ml-auto text-xs font-medium",
               state === "done" && "text-success",
               state === "current" && "text-foreground",
-              state === "upcoming" && "text-muted-foreground/70",
+              state === "upcoming" && "text-muted-foreground",
             )}
           >
             {STATE_LABELS[state]}

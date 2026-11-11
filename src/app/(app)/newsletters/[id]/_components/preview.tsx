@@ -39,7 +39,7 @@ export function NewsletterPreview({
         <dd className="font-medium">{subject || "(geen onderwerpregel)"}</dd>
       </dl>
 
-      <article className="mx-auto max-w-[600px] overflow-hidden rounded-lg border bg-white shadow-sm">
+      <article className="paper mx-auto max-w-[600px] overflow-hidden rounded-lg border shadow-sm">
         <header className="border-b bg-foreground px-7 py-6 text-background">
           <p className="text-[0.68rem] font-semibold opacity-70">
             {kind === "external" ? "Nieuwsbrief" : "Interne nieuwsbrief"} · {monthLabel}

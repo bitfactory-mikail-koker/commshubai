@@ -218,7 +218,7 @@ function AgentCard({ agent, canManage }: { agent: AgentRow; canManage: boolean }
                   key={source.key}
                   className={cn(
                     "rounded-full border px-2.5 py-0.5 text-xs",
-                    allowed ? "bg-background font-medium" : "border-dashed text-muted-foreground/70 line-through",
+                    allowed ? "bg-background font-medium" : "border-dashed text-muted-foreground line-through",
                   )}
                 >
                   {source.label}
