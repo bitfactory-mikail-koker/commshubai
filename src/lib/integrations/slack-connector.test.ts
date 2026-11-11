@@ -15,14 +15,40 @@ type Call = { method: string; body: Record<string, string> };
 let server: Server;
 const calls: Call[] = [];
 let usersPage = 0;
+let historyMode: "single" | "paged" | "endless" = "single";
+const historyCursors: string[] = [];
+let failPosts = 0;
+let postAttempts = 0;
 
 const RESPONSES: Record<string, (body: Record<string, string>) => Record<string, unknown>> = {
-  "chat.postMessage": (body) => ({ ok: true, ts: "1700000000.000100", channel: body.channel }),
+  "chat.postMessage": (body) => {
+    postAttempts++;
+    return failPosts > 0 ? { ok: false, error: "internal_error" } : { ok: true, ts: "1700000000.000100", channel: body.channel };
+  },
   "conversations.info": (body) =>
     body.channel === "CMISSING"
       ? { ok: false, error: "channel_not_found" }
       : { ok: true, channel: { id: body.channel, name: "project-x", is_private: false, is_member: true, is_shared: false } },
-  "conversations.history": () => ({
+  "conversations.history": (body) => {
+    historyCursors.push(body.cursor ?? "");
+    if (historyMode === "paged") {
+      const first = !body.cursor;
+      return {
+        ok: true,
+        messages: [{ ts: first ? "1700000010.000000" : "1700000020.000000", text: first ? "Eerste pagina met Veldhuis" : "Tweede pagina met Veldhuis", user: "U1" }],
+        has_more: first,
+        response_metadata: { next_cursor: first ? "page2" : "" },
+      };
+    }
+    if (historyMode === "endless") {
+      return {
+        ok: true,
+        messages: [{ ts: `17000001${historyCursors.length}.000000`, text: "Altijd meer berichten over Veldhuis", user: "U1" }],
+        has_more: true,
+        response_metadata: { next_cursor: `next-${historyCursors.length}` },
+      };
+    }
+    return {
     ok: true,
     messages: [
       { ts: "1700000001.000000", text: "Klantcase live gegaan bij Veldhuis", user: "U1" },
@@ -30,7 +56,8 @@ const RESPONSES: Record<string, (body: Record<string, string>) => Record<string,
       { ts: "1700000003.000000", text: "joined", subtype: "channel_join", user: "U2" },
       { ts: "1700000004.000000", text: "Iets heel anders", user: "U3" },
     ],
-  }),
+    };
+  },
   "users.list": () => {
     usersPage++;
     return usersPage === 1
@@ -110,6 +137,40 @@ describe("Slack connector on the official client", () => {
     expect(members.map((m) => m.id)).toEqual(["U1", "UGUEST", "U9"]);
     expect(members[0]).toMatchObject({ name: "Tim Hoekstra", email: "tim@noordlicht.example", title: "DM", isGuest: false });
     expect(members[1].isGuest).toBe(true);
+  });
+
+  it("reads every page of channel history", async () => {
+    historyMode = "paged";
+    historyCursors.length = 0;
+    try {
+      const found = await searchSlackHistory("xoxb-test", "C1", new Date("2023-11-01T00:00:00Z"), ["veldhuis"], 8);
+      expect(found.map((m) => m.text)).toEqual(["Eerste pagina met Veldhuis", "Tweede pagina met Veldhuis"]);
+      expect(historyCursors).toEqual(["", "page2"]);
+    } finally {
+      historyMode = "single";
+    }
+  });
+
+  it("fails instead of silently dropping messages when a channel has too many", async () => {
+    historyMode = "endless";
+    historyCursors.length = 0;
+    try {
+      await expect(searchSlackHistory("xoxb-test", "C1", new Date("2023-11-01T00:00:00Z"), ["veldhuis"], 8)).rejects.toThrow(/meer dan/);
+      expect(historyCursors.length).toBe(5);
+    } finally {
+      historyMode = "single";
+    }
+  });
+
+  it("does not retry a message post, so a lost reply cannot post it twice", async () => {
+    failPosts = 1;
+    postAttempts = 0;
+    try {
+      await expect(postSlackMessage("xoxb-test", { channel: "C1", text: "Hoi" })).rejects.toBeInstanceOf(ConnectorError);
+      expect(postAttempts).toBe(1);
+    } finally {
+      failPosts = 0;
+    }
   });
 
   it("reports an unreachable Slack as a connector error", async () => {

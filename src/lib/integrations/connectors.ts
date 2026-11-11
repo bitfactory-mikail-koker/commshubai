@@ -1,6 +1,7 @@
 import "server-only";
 import { createHmac } from "node:crypto";
-import { ErrorCode, WebClient, type UsersListResponse, type WebAPICallError } from "@slack/web-api";
+import { ErrorCode, WebClient, type ConversationsHistoryResponse, type UsersListResponse, type WebAPICallError } from "@slack/web-api";
+import type { MessageElement } from "@slack/web-api/dist/types/response/ConversationsHistoryResponse";
 import pLimit from "p-limit";
 import { env } from "@/lib/env";
 import { safeEqual } from "@/lib/secure-compare";
@@ -26,8 +27,8 @@ export type IngestMessage = {
 };
 
 export class ConnectorError extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "ConnectorError";
   }
 }
@@ -48,31 +49,62 @@ const SLACK_CONCURRENCY = 4;
 const SLACK_RETRIES = 2;
 const slackLimit = pLimit(SLACK_CONCURRENCY);
 
-function slackClient(token: string): WebClient {
-  return new WebClient(token, { slackApiUrl: env.slackApiUrl, timeout: TIMEOUT_MS, retryConfig: { retries: SLACK_RETRIES } });
+function slackClient(token: string, retries = SLACK_RETRIES): WebClient {
+  return new WebClient(token, { slackApiUrl: env.slackApiUrl, timeout: TIMEOUT_MS, retryConfig: { retries } });
 }
 
-function slackFailure(error: unknown): ConnectorError {
-  if (error instanceof ConnectorError) return error;
-  const failure = error as WebAPICallError;
-  switch (failure.code) {
+const SLACK_ERROR_CODES: readonly string[] = Object.values(ErrorCode);
+
+function isSlackError(error: unknown): error is WebAPICallError {
+  return typeof error === "object" && error !== null && "code" in error && SLACK_ERROR_CODES.includes(String((error as { code: unknown }).code));
+}
+
+function slackFailure(error: unknown): unknown {
+  if (error instanceof ConnectorError || !isSlackError(error)) return error;
+  switch (error.code) {
     case ErrorCode.PlatformError:
-      return new ConnectorError(`Slack meldt: ${failure.data.error ?? "onbekende fout"}.`);
+      return new ConnectorError(`Slack meldt: ${error.data?.error ?? "onbekende fout"}.`, { cause: error });
     case ErrorCode.HTTPError:
-      return new ConnectorError(`Slack gaf HTTP ${failure.statusCode}.`);
+      return new ConnectorError(`Slack gaf HTTP ${error.statusCode}.`, { cause: error });
     case ErrorCode.RateLimitedError:
-      return new ConnectorError(`Slack vraagt om ${failure.retryAfter} seconden te wachten.`);
+      return new ConnectorError(`Slack vraagt om ${error.retryAfter} seconden te wachten.`, { cause: error });
     default:
-      return new ConnectorError("Verbinding mislukt: Slack is niet bereikbaar of antwoordt niet op tijd.");
+      return new ConnectorError("Verbinding mislukt: Slack is niet bereikbaar of antwoordt niet op tijd.", { cause: error });
   }
 }
 
-async function slackCall<T>(call: (client: WebClient) => Promise<T>, token: string): Promise<T> {
+async function slackCall<T>(call: (client: WebClient) => Promise<T>, token: string, retries?: number): Promise<T> {
   try {
-    return await call(slackClient(token));
+    return await call(slackClient(token, retries));
   } catch (error) {
     throw slackFailure(error);
   }
+}
+
+const HISTORY_PAGE_SIZE = 200;
+const HISTORY_MAX_PAGES = 5;
+
+async function historyMessages(token: string, channel: string, since: Date): Promise<MessageElement[]> {
+  const messages: MessageElement[] = [];
+  try {
+    const pages = slackClient(token).paginate("conversations.history", {
+      channel,
+      oldest: String(Math.floor(since.getTime() / 1000)),
+      limit: HISTORY_PAGE_SIZE,
+    });
+    let fetched = 0;
+    for await (const page of pages) {
+      const history = page as ConversationsHistoryResponse;
+      messages.push(...(history.messages ?? []));
+      fetched++;
+      if (fetched >= HISTORY_MAX_PAGES && history.has_more) {
+        throw new ConnectorError(`Kanaal ${channel} heeft meer dan ${HISTORY_PAGE_SIZE * HISTORY_MAX_PAGES} berichten in deze periode. Kies een kortere periode.`);
+      }
+    }
+  } catch (error) {
+    throw slackFailure(error);
+  }
+  return messages;
 }
 
 const listOf = (value: unknown): string[] =>
@@ -107,11 +139,8 @@ type RawSlackItem = { channel: string; channelName: string; ts: string; text: st
 async function channelHistory(token: string, channel: string, since: Date): Promise<RawSlackItem[]> {
   const info = await slackCall((client) => client.conversations.info({ channel }), token);
   if (info.channel?.is_private || info.channel?.is_im) return [];
-  const history = await slackCall(
-    (client) => client.conversations.history({ channel, oldest: String(Math.floor(since.getTime() / 1000)), limit: 100 }),
-    token,
-  );
-  return (history.messages ?? []).flatMap((m) =>
+  const messages = await historyMessages(token, channel, since);
+  return messages.flatMap((m) =>
     m.subtype || m.bot_id || !m.text || m.text.trim().length < 20 || !m.user || !m.ts
       ? []
       : [{ channel, channelName: info.channel?.name ?? channel, ts: m.ts, text: m.text, user: m.user }],
@@ -123,7 +152,7 @@ async function slackUserName(token: string, user: string): Promise<string> {
     const result = await slackCall((client) => client.users.info({ user }), token);
     return result.user?.real_name ?? result.user?.name ?? "Onbekend";
   } catch (error) {
-    if (error instanceof ConnectorError) return "Onbekend";
+    if (error instanceof ConnectorError && /users_not_found|user_not_found/.test(error.message)) return "Onbekend";
     throw error;
   }
 }
@@ -162,6 +191,7 @@ export async function postSlackMessage(
         unfurl_links: false,
       }),
     token,
+    0,
   );
   return { ts: String(result.ts), channel: String(result.channel) };
 }
@@ -178,18 +208,15 @@ const toSlackMessage = (m: { ts?: string; text?: string; user?: string }): Slack
 export async function fetchSlackMessage(token: string, channel: string, ts: string): Promise<SlackMessage | null> {
   const history = await slackCall((client) => client.conversations.history({ channel, latest: ts, oldest: ts, inclusive: true, limit: 1 }), token);
   const message = history.messages?.[0];
-  if (!message || message.bot_id || !message.text) return null;
+  if (!message?.ts || message.bot_id || !message.text) return null;
   return toSlackMessage(message);
 }
 
 export async function searchSlackHistory(token: string, channel: string, since: Date, terms: string[], max: number): Promise<SlackMessage[]> {
-  const history = await slackCall(
-    (client) => client.conversations.history({ channel, oldest: String(Math.floor(since.getTime() / 1000)), limit: 200 }),
-    token,
-  );
+  const messages = await historyMessages(token, channel, since);
   const needles = terms.map((term) => term.toLowerCase());
-  return (history.messages ?? [])
-    .filter((m) => !m.subtype && !m.bot_id && m.text && needles.some((n) => m.text!.toLowerCase().includes(n)))
+  return messages
+    .filter((m) => m.ts && !m.subtype && !m.bot_id && m.text && needles.some((n) => m.text!.toLowerCase().includes(n)))
     .slice(0, max)
     .map(toSlackMessage);
 }
