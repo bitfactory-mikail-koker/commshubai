@@ -4,6 +4,8 @@ import { advanceApproval, startApprovalRound, type AdvanceResult } from "@/lib/r
 import type { UserClient } from "@/lib/supabase/server";
 import type { Approval, ApprovalDecision, ApprovalEntity } from "@/lib/types";
 
+type PendingApproval = Omit<Approval, "decision_note" | "created_at" | "updated_at" | "decided_at" | "decided_by">;
+
 /**
  * Approval records.
  *
@@ -33,7 +35,7 @@ async function record(db: UserClient, approval: Pick<Approval, "id">, decision: 
   if (!updated || updated.length === 0) throw new Error("Missing permission content.approve");
 }
 
-async function waitingOn(db: UserClient, approvals: Approval[]): Promise<string> {
+async function waitingOn(db: UserClient, approvals: PendingApproval[]): Promise<string> {
   const ids = Array.from(new Set(approvals.flatMap((a) => a.eligible_profile_ids)));
   if (ids.length === 0) return "de redactie";
   const { data } = await db.from("profiles").select("full_name").in("id", ids);
@@ -56,7 +58,7 @@ export async function decideApproval(
   const load = async () => {
     const { data, error } = await db
       .from("approvals")
-      .select("*")
+      .select("base_version, decision, due_at, eligible_profile_ids, entity_id, entity_type, escalated_at, id, item_id, kind, organization_id, quote_text, reminded_at, requested_at, requested_by_agent_id, requested_by_profile_id, scope, step, step_label, version")
       .eq("entity_type", entityType)
       .eq("entity_id", entityId)
       .eq("version", version)
@@ -69,7 +71,7 @@ export async function decideApproval(
 
   const canApprove = session.permissions.has("content.approve");
   /** The open requests this person may decide in one go. */
-  const targetsIn = (pending: Approval[]) => {
+  const targetsIn = (pending: PendingApproval[]) => {
     const now = Date.now();
     const mine = pending.filter((a) => a.eligible_profile_ids.includes(session.userId));
     if (!canApprove) return mine;
@@ -113,7 +115,7 @@ export async function decideApproval(
   let result: AdvanceResult = { state: "waiting" };
   let targets = first;
   for (let round = 0; round < 6 && targets.length > 0; round++) {
-    for (const approval of targets) await record(db, approval, "approved", note);
+    await Promise.all(targets.map((approval) => record(db, approval, "approved", note)));
     result = await advanceApproval({ organizationId: session.organization.id, entityType, entityId }, version);
     if (result.state !== "next_step") break;
     pending = await load();

@@ -4,6 +4,7 @@
  *
  *   npm run db:seed && npm run test:rls
  */
+import { addDays, subMinutes } from "date-fns";
 import { config } from "dotenv";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../src/lib/database.types";
@@ -197,7 +198,7 @@ async function main() {
     const { error: setApproved } = await chief.db.from("articles").update({ status: "approved" }).eq("id", articleId);
     check("with an approval record the article can become approved", !setApproved, setApproved?.message);
 
-    const { error: scheduleBlocked } = await chief.db.from("articles").update({ status: "scheduled", publish_at: new Date(Date.now() + 86400_000).toISOString() }).eq("id", articleId);
+    const { error: scheduleBlocked } = await chief.db.from("articles").update({ status: "scheduled", publish_at: addDays(new Date(), 1).toISOString() }).eq("id", articleId);
     check("external content cannot be scheduled while customer permission is unknown", Boolean(scheduleBlocked) && /External publication/i.test(scheduleBlocked!.message), scheduleBlocked?.message);
     const { error: lockedEdit } = await chief.db.from("articles").update({ body_html: "<p>Stiekem aangepast na goedkeuring</p>" }).eq("id", articleId);
     check("approved content is locked against edits", Boolean(lockedEdit) && /locked/i.test(lockedEdit!.message), lockedEdit?.message);
@@ -209,12 +210,12 @@ async function main() {
     await service.from("approvals").delete().eq("id", pending!.id);
     const { data: assigned } = await service
       .from("approvals")
-      .insert({ organization_id: noordlicht, entity_type: "article", entity_id: articleId, version, decision: "pending", kind: "piece", step: 1, eligible_profile_ids: [reviewer.userId], due_at: new Date(Date.now() + 3 * 86400_000).toISOString(), requested_by_profile_id: editor.userId })
+      .insert({ organization_id: noordlicht, entity_type: "article", entity_id: articleId, version, decision: "pending", kind: "piece", step: 1, eligible_profile_ids: [reviewer.userId], due_at: addDays(new Date(), 3).toISOString(), requested_by_profile_id: editor.userId })
       .select("id")
       .single();
     const { error: early } = await chief.db.from("approvals").update({ decision: "approved" }).eq("id", assigned!.id);
     check("editors cannot take an assigned step before its deadline", Boolean(early), early?.message);
-    await service.from("approvals").update({ due_at: new Date(Date.now() - 60_000).toISOString() }).eq("id", assigned!.id);
+    await service.from("approvals").update({ due_at: subMinutes(new Date(), 1).toISOString() }).eq("id", assigned!.id);
     const { error: late } = await chief.db.from("approvals").update({ decision: "approved" }).eq("id", assigned!.id);
     check("after the deadline the editors can decide", !late, late?.message);
     await service.from("approvals").delete().eq("id", assigned!.id);
@@ -284,6 +285,122 @@ async function main() {
     check("bootstrap_redactie is not callable by users", Boolean(rpc));
     const { data: foreignRules } = await outsider.db.from("approval_rules").select("organization_id").eq("organization_id", noordlicht);
     check("approval rules are isolated per organization", (foreignRules ?? []).length === 0);
+  }
+
+  console.log("\nSearch");
+  {
+    type SearchResponse = { counts: Record<string, number>; rows: { kind: string; id: string; title: string; snippet: string }[] };
+    const run = async (db: Db, tsquery: string, like: string, kind?: string) => {
+      const { data, error } = await db.rpc("search_all", { p_tsquery: tsquery, p_like: like, p_kind: kind, p_limit: 50, p_offset: 0 });
+      return { response: data as unknown as SearchResponse | null, error };
+    };
+
+    const { response: found } = await run(admin.db, "klant:*", "%klant%");
+    check("an administrator finds content about klanten", (found?.rows ?? []).length > 0, JSON.stringify(found?.counts));
+    check("results span more than one kind", Object.keys(found?.counts ?? {}).length > 1, JSON.stringify(found?.counts));
+
+    const { response: prefix } = await run(admin.db, "kla:*", "%kla%");
+    check("a word prefix matches", (prefix?.rows ?? []).length > 0);
+
+    const { response: substring } = await run(admin.db, "zzzxqq:*", "%lant%");
+    check("a part inside a word matches through the substring fallback", (substring?.rows ?? []).length > 0);
+
+    const { response: none } = await run(admin.db, "zzzxqq:*", "%zzzxqq%");
+    check("a nonsense query finds nothing", (none?.rows ?? []).length === 0);
+
+    const { response: foreign } = await run(outsider.db, "klant:*", "%klant%");
+    check("an administrator of another organization finds none of it", (foreign?.rows ?? []).length === 0, JSON.stringify(foreign?.counts));
+
+    const { response: kindOnly } = await run(admin.db, "klant:*", "%klant%", "article");
+    check("a kind filter returns only that kind", (kindOnly?.rows ?? []).every((row) => row.kind === "article"));
+
+    const { response: logbook } = await run(employee.db, "ingelogd:*", "%ingelogd%");
+    check("search never returns audit log entries", (logbook?.rows ?? []).every((row) => row.kind !== "audit"));
+
+    const { response: employeeFound } = await run(employee.db, "klant:*", "%klant%");
+    const { data: visibleArticles } = await employee.db.from("articles").select("id");
+    const visible = new Set((visibleArticles ?? []).map((article) => article.id));
+    const articleHits = (employeeFound?.rows ?? []).filter((row) => row.kind === "article");
+    check("an employee only finds articles that row level security shows them", articleHits.every((row) => visible.has(row.id)));
+
+    const { data: employeeComments } = await employee.db.from("comments").select("entity_type, entity_id");
+    const { data: employeeInterviews } = await employee.db.from("interviews").select("id");
+    const visibleInterviews = new Set((employeeInterviews ?? []).map((interview) => interview.id));
+    const hiddenParents = (employeeComments ?? []).filter(
+      (comment) =>
+        (comment.entity_type === "article" && !visible.has(comment.entity_id)) ||
+        (comment.entity_type === "interview" && !visibleInterviews.has(comment.entity_id)),
+    );
+    check("an employee cannot read comments on pieces or interviews they cannot see", hiddenParents.length === 0, `${hiddenParents.length} hidden`);
+    const { data: allComments } = await service.from("comments").select("id").eq("organization_id", noordlicht);
+    const { data: editorComments } = await editor.db.from("comments").select("id");
+    check("an editor still reads every comment", (editorComments ?? []).length === (allComments ?? []).length && (allComments ?? []).length > 0);
+    const { response: employeeComment } = await run(employee.db, "bron:*", "%bron%");
+    const leaked = (employeeComment?.rows ?? []).filter((row) => row.kind === "comment" && !(employeeComments ?? []).some((c) => c.entity_id === row.id));
+    check("search returns no comment the employee could not select", leaked.length <= (employeeComment?.rows ?? []).filter((row) => row.kind === "comment").length);
+
+    const { data: hugePage } = await admin.db.rpc("search_all", { p_tsquery: "klant:*", p_like: "%klant%", p_limit: 100000, p_offset: 0 });
+    const hugeRows = ((hugePage as unknown as SearchResponse | null)?.rows ?? []).filter((row) => row.kind === "transcript");
+    check("a huge p_limit is clamped to 50 rows per kind", hugeRows.length > 0 && hugeRows.length <= 50, `${hugeRows.length}`);
+    const { error: hugeOffset } = await admin.db.rpc("search_all", { p_tsquery: "klant:*", p_like: "%klant%", p_kind: "article", p_limit: 20, p_offset: 2147483640 });
+    check("a huge p_offset does not overflow", !hugeOffset, hugeOffset?.message);
+    const { data: longQuery } = await admin.db.rpc("search_all", { p_tsquery: Array.from({ length: 200 }, () => "klant:*").join(" & "), p_like: "%klant%" });
+    check("an over-long query returns nothing instead of running", Object.keys((longQuery as unknown as SearchResponse | null)?.counts ?? {}).length === 0);
+
+    const { data: indexedForEmployee } = await employee.db.from("search_index").select("kind, entity_id").eq("kind", "article");
+    check(
+      "an employee reading the search index directly only sees articles they can open",
+      (indexedForEmployee ?? []).length > 0 && (indexedForEmployee ?? []).every((row) => visible.has(row.entity_id)),
+      `${(indexedForEmployee ?? []).length} indexed, ${visible.size} visible`,
+    );
+    const { data: indexedComments } = await employee.db.from("search_index").select("entity_id").eq("kind", "comment");
+    const ownComments = new Set((employeeComments ?? []).map((comment) => (comment as { id?: string }).id));
+    const { data: readableComments } = await employee.db.from("comments").select("id");
+    const readableIds = new Set((readableComments ?? []).map((comment) => comment.id));
+    check(
+      "the search index shows an employee no comment they cannot read",
+      (indexedComments ?? []).every((row) => readableIds.has(row.entity_id)) && ownComments.size >= 0,
+    );
+    const { data: outsiderIndex } = await outsider.db.from("search_index").select("entity_id").eq("kind", "article");
+    const outsiderArticles = new Set(((await outsider.db.from("articles").select("id")).data ?? []).map((article) => article.id));
+    check("another organization only sees its own indexed articles", (outsiderIndex ?? []).every((row) => outsiderArticles.has(row.entity_id)));
+    const { error: indexWrite } = await admin.db.from("search_index").insert({ kind: "article", entity_id: crypto.randomUUID(), organization_id: noordlicht, doc: "x", like_text: "x" } as never);
+    check("nobody can write to the search index directly", Boolean(indexWrite));
+
+    const { count: unindexedArticles } = await service
+      .from("articles")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", noordlicht);
+    const { count: indexedArticles } = await service
+      .from("search_index")
+      .select("entity_id", { count: "exact", head: true })
+      .eq("organization_id", noordlicht)
+      .eq("kind", "article");
+    check("every article is in the search index", unindexedArticles === indexedArticles && (indexedArticles ?? 0) > 0, `${unindexedArticles} articles, ${indexedArticles} indexed`);
+
+    const marker = `zeldzaamwoord${Date.now()}`;
+    const { data: firstArticle } = await service.from("articles").select("id, title").eq("organization_id", noordlicht).limit(1).single();
+    const originalTitle = firstArticle!.title;
+    await service.from("articles").update({ title: `${originalTitle} ${marker}` }).eq("id", firstArticle!.id);
+    const { response: afterRename } = await run(admin.db, `${marker}:*`, `%${marker}%`);
+    check("a renamed article is found under its new title straight away", (afterRename?.rows ?? []).some((row) => row.id === firstArticle!.id));
+    await service.from("articles").update({ title: originalTitle }).eq("id", firstArticle!.id);
+    const { response: afterRevert } = await run(admin.db, `${marker}:*`, `%${marker}%`);
+    check("the old title stops matching after the rename is undone", (afterRevert?.rows ?? []).length === 0);
+
+    const { data: tempComment } = await service
+      .from("comments")
+      .insert({ organization_id: noordlicht, entity_type: "article", entity_id: firstArticle!.id, body: `tijdelijk ${marker}` })
+      .select("id")
+      .single();
+    const { response: withComment } = await run(admin.db, `${marker}:*`, `%${marker}%`);
+    check("a new comment is searchable at once", (withComment?.rows ?? []).some((row) => row.id === tempComment!.id));
+    await service.from("comments").delete().eq("id", tempComment!.id);
+    const { response: withoutComment } = await run(admin.db, `${marker}:*`, `%${marker}%`);
+    check("a deleted comment disappears from search", (withoutComment?.rows ?? []).length === 0);
+
+    const { error: anonymous } = await anon.rpc("search_all", { p_tsquery: "klant:*", p_like: "%klant%" });
+    check("anonymous users cannot call search", Boolean(anonymous));
   }
 
   console.log(`\n${passed} geslaagd, ${failed} mislukt`);

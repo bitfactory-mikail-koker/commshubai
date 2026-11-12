@@ -1,4 +1,5 @@
 import { HtmlContent } from "@/components/shared/layout";
+import { sanitizeHtml } from "@/lib/sanitize";
 import type { AgentKind } from "@/lib/types";
 import { groupBySection, type BuilderItem } from "./items";
 
@@ -38,7 +39,7 @@ export function NewsletterPreview({
         <dd className="font-medium">{subject || "(geen onderwerpregel)"}</dd>
       </dl>
 
-      <article className="mx-auto max-w-[600px] overflow-hidden rounded-lg border bg-white shadow-sm">
+      <article className="paper mx-auto max-w-[600px] overflow-hidden rounded-lg border shadow-sm">
         <header className="border-b bg-foreground px-7 py-6 text-background">
           <p className="text-[0.68rem] font-semibold opacity-70">
             {kind === "external" ? "Nieuwsbrief" : "Interne nieuwsbrief"} · {monthLabel}
@@ -48,7 +49,7 @@ export function NewsletterPreview({
 
         <div className="space-y-7 px-7 py-7">
           {introHtml ? (
-            <HtmlContent html={introHtml} compact />
+            <HtmlContent html={sanitizeHtml(introHtml)} compact />
           ) : (
             <p className="text-sm text-muted-foreground italic">Nog geen inleiding.</p>
           )}
@@ -78,7 +79,7 @@ export function NewsletterPreview({
 
           {outroHtml && (
             <div className="border-t pt-6">
-              <HtmlContent html={outroHtml} compact />
+              <HtmlContent html={sanitizeHtml(outroHtml)} compact />
             </div>
           )}
         </div>

@@ -212,9 +212,9 @@ export async function moveNewsletterItem(input: { id: string; direction: "up" | 
     const target = input.direction === "up" ? index - 1 : index + 1;
     if (index < 0 || target < 0 || target >= list.length) return ok();
     [list[index], list[target]] = [list[target], list[index]];
-    for (const [position, row] of list.entries()) {
-      if (row.position !== position) check(await db.from("newsletter_items").update({ position }).eq("id", row.id));
-    }
+    const moved = list.flatMap((row, position) => (row.position !== position ? [{ id: row.id, position }] : []));
+    const results = await Promise.all(moved.map(({ id: itemId, position }) => db.from("newsletter_items").update({ position }).eq("id", itemId)));
+    results.forEach(check);
     await bumpVersion(db, newsletter.id, newsletter.current_version);
     refresh();
     return ok();

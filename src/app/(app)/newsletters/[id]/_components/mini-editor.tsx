@@ -43,7 +43,7 @@ export function MiniEditor({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-lg border border-input bg-card transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50",
+        "overflow-hidden rounded-lg border border-input bg-card transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring",
         disabled && "opacity-70",
       )}
     >
@@ -58,7 +58,7 @@ export function MiniEditor({
             aria-pressed={editor?.isActive(tool.key) ?? false}
             title={tool.label}
             className={cn(
-              "flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
+              "flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
               editor?.isActive(tool.key) && "bg-foreground/10 text-foreground",
             )}
           >

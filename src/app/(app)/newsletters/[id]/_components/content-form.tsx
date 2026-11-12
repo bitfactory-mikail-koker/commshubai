@@ -5,6 +5,7 @@ import { RefreshCw, Save } from "lucide-react";
 import { regenerateFraming, updateNewsletter } from "@/actions/newsletters";
 import { ActionButton, FormField, SubmitButton, useAction } from "@/components/shared/actions";
 import { HtmlContent, Field } from "@/components/shared/layout";
+import type { SafeHtml } from "@/lib/safe-html";
 import { Input } from "@/components/ui/input";
 import { MiniEditor } from "./mini-editor";
 
@@ -19,15 +20,15 @@ export function ContentForm({
   newsletterId: string;
   title: string;
   subject: string;
-  introHtml: string;
-  outroHtml: string;
+  introHtml: SafeHtml;
+  outroHtml: SafeHtml;
   editable: boolean;
 }) {
   const { run, pending, fieldErrors } = useAction();
   const [title, setTitle] = useState(initialTitle);
   const [subject, setSubject] = useState(initialSubject);
-  const [introHtml, setIntroHtml] = useState(initialIntro);
-  const [outroHtml, setOutroHtml] = useState(initialOutro);
+  const [introHtml, setIntroHtml] = useState<string>(initialIntro);
+  const [outroHtml, setOutroHtml] = useState<string>(initialOutro);
   const [touched, setTouched] = useState(false);
 
   if (!editable) {

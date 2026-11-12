@@ -8,7 +8,7 @@ import { ClassificationBadge, ContentStatusBadge, ContentTypeLabel, MetaBadge, T
 import { FilterTabs, Notice, Panel } from "@/components/shared/layout";
 import { can, requireSession, type SessionContext } from "@/lib/auth";
 import { NEWSLETTER_STATUS_META, SOCIAL_STATUS_META } from "@/lib/constants";
-import { stripHtml } from "@/lib/format";
+import { stripHtml } from "@/lib/html-text";
 import { fromJson } from "@/lib/json";
 import { diffHtml, hasChanges } from "@/lib/redactie/diff";
 import { decidableBy, loadRound, profileNames, type QueueItem } from "@/lib/redactie/queries";
@@ -21,6 +21,8 @@ import { cn } from "@/lib/utils";
 import { DecisionPanel, type DecisionItem } from "./_components/decision-panel";
 import { FinalCheck } from "./_components/final-check";
 import { PassageActions } from "./_components/passage-actions";
+import { groupBy } from "@/lib/concurrency";
+import { markPlaceholders } from "@/lib/placeholders";
 
 export const metadata: Metadata = { title: "Voorvertoning" };
 
@@ -47,28 +49,44 @@ function toDecisionItems(items: QueueItem[], session: SessionContext): DecisionI
 async function loadSources(db: UserClient, article: { id: string; source_refs: unknown; interview_id: string | null }): Promise<SourceText[]> {
   const refs = fromJson<SourceRef[]>(article.source_refs as never, []);
   const messageIds = refs.map((r) => r.source_message_id).filter((id): id is string => Boolean(id));
-  const sources: SourceText[] = [];
-  if (messageIds.length > 0) {
-    const { data: messages } = await db.from("source_messages").select("id, title, body, channel_id").in("id", messageIds);
-    const channelIds = Array.from(new Set((messages ?? []).map((m) => m.channel_id).filter((id): id is string => Boolean(id))));
-    const { data: channels } = channelIds.length ? await db.from("channels").select("id, confidentiality").in("id", channelIds) : { data: [] };
-    const internal = new Set((channels ?? []).filter((c) => c.confidentiality === "internal_only").map((c) => c.id));
-    for (const message of messages ?? []) {
-      const ref = refs.find((r) => r.source_message_id === message.id);
-      sources.push({
-        label: ref?.label ?? "Bronbericht",
-        text: `${message.title ?? ""} ${message.body}`,
-        internalOnly: Boolean(message.channel_id && internal.has(message.channel_id)),
-      });
-    }
-  }
-  const { data: interviews } = await db
-    .from("interviews")
-    .select("id, interviewee_name, classification")
-    .or(`article_id.eq.${article.id}${article.interview_id ? `,id.eq.${article.interview_id}` : ""}`);
-  for (const interview of interviews ?? []) {
-    const { data: answers } = await db.from("interview_messages").select("content").eq("interview_id", interview.id).eq("role", "interviewee");
-    if (answers?.length) {
+  const [messagesRes, interviewsRes] = await Promise.all([
+    messageIds.length > 0
+      ? db.from("source_messages").select("id, title, body, channel_id").in("id", messageIds)
+      : Promise.resolve({ data: [] }),
+    db
+      .from("interviews")
+      .select("id, interviewee_name, classification")
+      .or(`article_id.eq.${article.id}${article.interview_id ? `,id.eq.${article.interview_id}` : ""}`),
+  ]);
+  const messages = messagesRes.data ?? [];
+  const interviews = interviewsRes.data ?? [];
+  const channelIds = Array.from(new Set(messages.map((m) => m.channel_id).filter((id): id is string => Boolean(id))));
+
+  const [channelsRes, answersRes] = await Promise.all([
+    channelIds.length > 0 ? db.from("channels").select("id, confidentiality").in("id", channelIds) : Promise.resolve({ data: [] }),
+    interviews.length > 0
+      ? db
+          .from("interview_messages")
+          .select("interview_id, content")
+          .in(
+            "interview_id",
+            interviews.map((interview) => interview.id),
+          )
+          .eq("role", "interviewee")
+          .order("created_at", { ascending: true })
+      : Promise.resolve({ data: [] }),
+  ]);
+  const internal = new Set((channelsRes.data ?? []).filter((c) => c.confidentiality === "internal_only").map((c) => c.id));
+  const answersByInterview = groupBy(answersRes.data ?? [], (answer) => answer.interview_id);
+
+  const sources: SourceText[] = messages.map((message) => ({
+    label: refs.find((r) => r.source_message_id === message.id)?.label ?? "Bronbericht",
+    text: `${message.title ?? ""} ${message.body}`,
+    internalOnly: Boolean(message.channel_id && internal.has(message.channel_id)),
+  }));
+  for (const interview of interviews) {
+    const answers = answersByInterview.get(interview.id) ?? [];
+    if (answers.length > 0) {
       sources.push({
         label: `Interview met ${interview.interviewee_name}`,
         text: answers.map((a) => a.content).join(" "),
@@ -290,7 +308,7 @@ export default async function PreviewPage({
   const view = query.toon === "alles" || !diff ? "alles" : "wijzigingen";
 
   if (entityType === "article") {
-    const marked = highlightQuotes(bodyHtml, ownQuotes).replace(/\[AANVULLEN[^\]]*\]/g, (m) => `<mark class="placeholder-mark">${m}</mark>`);
+    const marked = markPlaceholders(highlightQuotes(bodyHtml, ownQuotes));
     main = (
       <div className="space-y-4">
         {diff && (
@@ -341,7 +359,7 @@ export default async function PreviewPage({
       <header className="space-y-4">
         <Link
           href="/for-me"
-          className="inline-flex items-center gap-1.5 rounded-sm text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="inline-flex items-center gap-1.5 rounded-sm text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ArrowLeft className="size-4" strokeWidth={1.75} />
           Voor mij
@@ -394,7 +412,7 @@ export default async function PreviewPage({
 
           {traced.length > 0 && (
             <details className="group rounded-lg border">
-              <summary className="flex items-center gap-2 px-4 py-2.5 text-[0.8125rem] font-medium outline-none hover:bg-subtle focus-visible:ring-3 focus-visible:ring-ring/50">
+              <summary className="flex items-center gap-2 px-4 py-2.5 text-[0.8125rem] font-medium outline-none hover:bg-subtle focus-visible:ring-2 focus-visible:ring-ring">
                 <FileSearch className="size-4 text-muted-foreground" strokeWidth={1.75} />
                 Bronnen per alinea
                 <span className="ml-auto text-xs font-normal text-muted-foreground">

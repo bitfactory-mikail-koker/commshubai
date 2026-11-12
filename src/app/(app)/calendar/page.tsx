@@ -15,6 +15,8 @@ import type { CalendarEntry } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AddDeadlineDialog } from "./_components/add-deadline-dialog";
 
+type CalendarRow = Omit<CalendarEntry, "created_by" | "created_at" | "updated_at" | "organization_id">;
+
 export const metadata: Metadata = { title: "Contentkalender" };
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -40,9 +42,9 @@ const TYPE_ICONS: Record<string, LucideIcon> = {
   deadline: Flag,
 };
 
-type Entry = CalendarEntry & { dayKey: string; time: string; href: string | null };
+type Entry = CalendarRow & { dayKey: string; time: string; href: string | null };
 
-function entryHref(entry: CalendarEntry): string | null {
+function entryHref(entry: CalendarRow): string | null {
   if (!entry.entity_id) return null;
   switch (entry.entity_type) {
     case "article":
@@ -83,7 +85,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const to = new Date(Date.UTC(gridEnd.getFullYear(), gridEnd.getMonth(), gridEnd.getDate() + 2));
   const { data, error } = await db
     .from("content_calendar")
-    .select("*")
+    .select("classification, entity_id, entity_type, entry_type, id, notes, starts_at, status, title")
     .gte("starts_at", from.toISOString())
     .lt("starts_at", to.toISOString())
     .order("starts_at", { ascending: true });
@@ -169,7 +171,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                             <Link
                               href={entry.href}
                               className={cn(
-                                "block rounded-sm text-sm font-medium outline-none hover:underline hover:underline-offset-2 focus-visible:ring-3 focus-visible:ring-ring/50",
+                                "block rounded-sm text-sm font-medium outline-none hover:underline hover:underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring",
                                 done && "text-muted-foreground",
                               )}
                             >
@@ -233,7 +235,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               <Link
                 href={href({ maand: format(addMonths(monthStart, -1), "yyyy-MM") })}
                 aria-label="Vorige maand"
-                className="flex size-8 items-center justify-center rounded-l-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="flex size-8 items-center justify-center rounded-l-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <ChevronLeft className="size-4" />
               </Link>
@@ -243,7 +245,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               <Link
                 href={href({ maand: format(addMonths(monthStart, 1), "yyyy-MM") })}
                 aria-label="Volgende maand"
-                className="flex size-8 items-center justify-center rounded-r-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="flex size-8 items-center justify-center rounded-r-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <ChevronRight className="size-4" />
               </Link>
@@ -251,7 +253,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             {!isCurrentMonth && (
               <Link
                 href={href({ maand: null })}
-                className="inline-flex h-8 items-center rounded-md border bg-card px-3 text-[0.8125rem] font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="inline-flex h-8 items-center rounded-md border bg-card px-3 text-[0.8125rem] font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Vandaag
               </Link>
@@ -271,7 +273,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                   scroll={false}
                   aria-current={classification === option.key ? "page" : undefined}
                   className={cn(
-                    "inline-flex h-7 items-center rounded-md px-2.5 text-[0.8125rem] font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                    "inline-flex h-7 items-center rounded-md px-2.5 text-[0.8125rem] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     classification === option.key ? "bg-secondary text-foreground ring-1 ring-border ring-inset" : "text-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -290,7 +292,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                   scroll={false}
                   aria-current={view === option.key ? "page" : undefined}
                   className={cn(
-                    "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[0.8125rem] font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                    "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[0.8125rem] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     view === option.key ? "bg-secondary text-foreground ring-1 ring-border ring-inset" : "text-muted-foreground hover:text-foreground",
                   )}
                 >

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, use, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -50,7 +50,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { SearchDialog, SearchTrigger } from "@/components/shell/search-dialog";
+import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -79,20 +80,32 @@ const ICONS: Record<string, LucideIcon> = {
   demo: PlayCircle,
 };
 
-export type NavItem = { key: string; label: string; href: string; badge?: number };
+export type NavItem = { key: string; label: string; href: string };
+export type NavBadges = Partial<Record<string, number>>;
 export type NavGroup = { label: string; items: NavItem[] };
 
 export type ShellProps = {
   groups: NavGroup[];
+  badges: Promise<NavBadges>;
   organizationName: string;
-  user: { name: string; email: string; role: string; avatarColor: string };
+  user: { id: string; name: string; email: string; role: string; avatarColor: string };
   ai: { id: "claude" | "demo"; label: string };
   /** Shown when the bot is not simply running: paused, or only showing the editors what it would do. */
   bot?: { state: "paused" | "shadow"; href: string } | null;
   children: React.ReactNode;
 };
 
-function NavList({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () => void }) {
+function NavBadge({ badges, itemKey }: { badges: Promise<NavBadges>; itemKey: string }) {
+  const count = use(badges)[itemKey];
+  if (!count) return null;
+  return (
+    <span className="ml-auto min-w-5 rounded-xs bg-foreground/[0.07] px-1 text-center text-xs leading-5 font-medium text-foreground/80 tabular-nums">
+      {count}
+    </span>
+  );
+}
+
+function NavList({ groups, badges, onNavigate }: { groups: NavGroup[]; badges: Promise<NavBadges>; onNavigate?: () => void }) {
   const pathname = usePathname();
   return (
     <nav className="flex flex-col gap-4" aria-label="Hoofdnavigatie">
@@ -110,7 +123,7 @@ function NavList({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () =
                     onClick={onNavigate}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex h-8 items-center gap-2.5 rounded-md px-2 text-[0.8125rem] outline-none transition-colors duration-150 focus-visible:ring-3 focus-visible:ring-ring/50",
+                      "flex h-8 items-center gap-2.5 rounded-md px-2 text-[0.8125rem] outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring",
                       active
                         ? "bg-sidebar-accent font-medium text-foreground"
                         : "text-foreground/70 hover:bg-sidebar-accent/60 hover:text-foreground",
@@ -118,11 +131,9 @@ function NavList({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () =
                   >
                     <Icon className={cn("size-4 shrink-0", active ? "text-foreground" : "text-muted-foreground")} strokeWidth={1.75} />
                     <span className="truncate">{item.label}</span>
-                    {item.badge ? (
-                      <span className="ml-auto min-w-5 rounded-xs bg-foreground/[0.07] px-1 text-center text-xs leading-5 font-medium text-foreground/80 tabular-nums">
-                        {item.badge}
-                      </span>
-                    ) : null}
+                    <Suspense fallback={null}>
+                      <NavBadge badges={badges} itemKey={item.key} />
+                    </Suspense>
                   </Link>
                 </li>
               );
@@ -138,7 +149,7 @@ function Brand({ organizationName }: { organizationName: string }) {
   return (
     <Link
       href="/dashboard"
-      className="flex items-center gap-2.5 rounded-md px-2 py-1.5 outline-none transition-colors duration-150 hover:bg-sidebar-accent/60 focus-visible:ring-3 focus-visible:ring-ring/50"
+      className="flex items-center gap-2.5 rounded-md px-2 py-1.5 outline-none transition-colors duration-150 hover:bg-sidebar-accent/60 focus-visible:ring-2 focus-visible:ring-ring"
     >
       <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-foreground text-[0.8125rem] font-semibold text-background">
         C
@@ -156,7 +167,7 @@ function AiStatus({ ai }: { ai: ShellProps["ai"] }) {
     <Link
       href="/settings"
       title={ai.id === "claude" ? ai.label : "Geen API-sleutel ingesteld: analyses en concepten zijn regelgebaseerd."}
-      className="flex h-8 items-center gap-2.5 rounded-md px-2 text-xs text-muted-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+      className="flex h-8 items-center gap-2.5 rounded-md px-2 text-xs text-muted-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
     >
       <Sparkles className="size-4 shrink-0" strokeWidth={1.75} />
       <span className="truncate">{ai.id === "claude" ? "AI: Claude API" : "AI: demo-modus"}</span>
@@ -174,7 +185,7 @@ function BotStatus({ bot }: { bot: NonNullable<ShellProps["bot"]> }) {
           : "De bot laat alleen aan de redactie zien wat hij zou doen. Er gaat niets naar collega's."
       }
       className={cn(
-        "flex h-8 items-center gap-2.5 rounded-md px-2 text-xs outline-none transition-colors duration-150 hover:bg-sidebar-accent/60 focus-visible:ring-3 focus-visible:ring-ring/50",
+        "flex h-8 items-center gap-2.5 rounded-md px-2 text-xs outline-none transition-colors duration-150 hover:bg-sidebar-accent/60 focus-visible:ring-2 focus-visible:ring-ring",
         bot.state === "paused" ? "font-medium text-warning" : "text-muted-foreground hover:text-foreground",
       )}
     >
@@ -191,7 +202,7 @@ function UserMenu({ user }: { user: ShellProps["user"] }) {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left outline-none transition-colors duration-150 hover:bg-sidebar-accent/60 focus-visible:ring-3 focus-visible:ring-ring/50 aria-expanded:bg-sidebar-accent/60"
+          className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left outline-none transition-colors duration-150 hover:bg-sidebar-accent/60 focus-visible:ring-2 focus-visible:ring-ring aria-expanded:bg-sidebar-accent/60"
         >
           <UserAvatar name={user.name} />
           <span className="min-w-0 flex-1 leading-tight">
@@ -238,14 +249,26 @@ function UserMenu({ user }: { user: ShellProps["user"] }) {
   );
 }
 
-function SidebarBody({ groups, organizationName, user, ai, bot, onNavigate }: Omit<ShellProps, "children"> & { onNavigate?: () => void }) {
+function SidebarBody({
+  groups,
+  badges,
+  organizationName,
+  user,
+  ai,
+  bot,
+  onNavigate,
+  onOpenSearch,
+}: Omit<ShellProps, "children"> & { onNavigate?: () => void; onOpenSearch: () => void }) {
   return (
     <>
       <div className="p-2">
         <Brand organizationName={organizationName} />
       </div>
-      <div className="flex-1 overflow-y-auto px-2 py-2">
-        <NavList groups={groups} onNavigate={onNavigate} />
+      <div className="px-2 pb-1">
+        <SearchTrigger onOpen={onOpenSearch} />
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+        <NavList groups={groups} badges={badges} onNavigate={onNavigate} />
       </div>
       <div className="space-y-px border-t p-2">
         {bot && <BotStatus bot={bot} />}
@@ -256,17 +279,22 @@ function SidebarBody({ groups, organizationName, user, ai, bot, onNavigate }: Om
   );
 }
 
-export function AppShell({ groups, organizationName, user, ai, bot, children }: ShellProps) {
+export function AppShell({ groups, badges, organizationName, user, ai, bot, children }: ShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const openSearch = () => setSearchOpen(true);
   return (
     <div className="flex min-h-[100dvh]">
+      <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} userId={user.id} onNavigate={() => setMobileOpen(false)} />
       <aside className="sticky top-0 hidden h-[100dvh] w-60 shrink-0 flex-col border-r bg-sidebar lg:flex">
-        <SidebarBody groups={groups} organizationName={organizationName} user={user} ai={ai} bot={bot} />
+        <SidebarBody groups={groups} badges={badges} organizationName={organizationName} user={user} ai={ai} bot={bot} onOpenSearch={openSearch} />
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="sticky top-0 z-30 flex h-13 items-center justify-between gap-3 border-b bg-background px-3 lg:hidden">
           <Brand organizationName={organizationName} />
+          <div className="flex items-center gap-1">
+          <SearchTrigger variant="icon" onOpen={openSearch} />
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" aria-label="Menu openen">
@@ -275,16 +303,20 @@ export function AppShell({ groups, organizationName, user, ai, bot, children }: 
             </SheetTrigger>
             <SheetContent side="left" className="flex w-72 flex-col gap-0 bg-sidebar p-0">
               <SheetTitle className="sr-only">Navigatie</SheetTitle>
+              <SheetDescription className="sr-only">Navigatie en zoeken</SheetDescription>
               <SidebarBody
                 groups={groups}
+                badges={badges}
                 organizationName={organizationName}
                 user={user}
                 ai={ai}
                 bot={bot}
                 onNavigate={() => setMobileOpen(false)}
+                onOpenSearch={openSearch}
               />
             </SheetContent>
           </Sheet>
+          </div>
         </div>
 
         <main className="mx-auto w-full max-w-[1360px] flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">{children}</main>

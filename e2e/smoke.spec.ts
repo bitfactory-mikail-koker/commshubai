@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { login, trackErrors } from "./helpers";
+import { confirmationLinkFor, login, trackErrors } from "./helpers";
 
 const ROUTES: { path: string; heading: RegExp }[] = [
   { path: "/dashboard", heading: /Dashboard/ },
@@ -96,6 +96,16 @@ test.describe("role-based access in the interface", () => {
     await expect(page.getByRole("heading", { name: "Inloggen" })).toBeVisible();
   });
 
+  test("the login page never sends someone off the site", async ({ page }) => {
+    for (const next of ["//evil.example", "/\\evil.example", "https://evil.example"]) {
+      await page.goto(`/login?next=${encodeURIComponent(next)}`);
+      await page.getByRole("button", { name: /Sanne/ }).click();
+      await page.waitForURL(/localhost:3000\/(for-me|dashboard)/);
+      expect(new URL(page.url()).hostname).toBe("localhost");
+      await page.context().clearCookies();
+    }
+  });
+
   test("wrong credentials show a Dutch error", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("E-mailadres").fill("sanne@noordlicht.example");
@@ -115,7 +125,18 @@ test.describe("multi-tenancy", () => {
     await page.getByLabel("E-mailadres").fill(`e2e-owner-${stamp}@example.org`);
     await page.getByLabel("Wachtwoord").fill("Een-Sterk-Wachtwoord-2026");
     await page.getByRole("button", { name: "Omgeving aanmaken" }).click();
-    await page.waitForURL("**/dashboard", { timeout: 30_000 });
+    await expect(page.getByRole("heading", { name: "Controleer je e-mail" })).toBeVisible({ timeout: 30_000 });
+
+    await page.goto("/login");
+    await page.getByLabel("E-mailadres").fill(`e2e-owner-${stamp}@example.org`);
+    await page.getByLabel("Wachtwoord").fill("Een-Sterk-Wachtwoord-2026");
+    await page.getByRole("button", { name: "Inloggen", exact: true }).click();
+    await expect(page.getByText("Bevestig eerst je e-mailadres")).toBeVisible();
+    await expect(page).toHaveURL(/\/login/);
+
+    await page.goto(await confirmationLinkFor(`e2e-owner-${stamp}@example.org`));
+    await page.waitForURL(/\/(for-me|dashboard)/, { timeout: 30_000 });
+    await page.goto("/dashboard");
     await expect(page.getByText(/Goede(morgen|middag|navond), Robin/)).toBeVisible();
 
     // No data from the demo organization is visible; empty states render.

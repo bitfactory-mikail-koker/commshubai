@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Placeholder from "@tiptap/extension-placeholder";
+import { CharacterCount } from "@tiptap/extensions";
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import {
@@ -29,7 +30,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { SafeHtml } from "@/lib/safe-html";
 import { cn } from "@/lib/utils";
+
+const fromSchemaOutput = (html: string): SafeHtml => html as SafeHtml;
 
 function ToolbarButton({
   icon: Icon,
@@ -56,7 +60,7 @@ function ToolbarButton({
           onMouseDown={(e) => e.preventDefault()}
           onClick={onClick}
           className={cn(
-            "inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40",
+            "inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40",
             active && "bg-secondary text-foreground ring-1 ring-border ring-inset hover:bg-secondary",
           )}
         >
@@ -204,7 +208,7 @@ export function RichTextEditor({
 }: {
   value: string;
   editable: boolean;
-  onChange: (html: string) => void;
+  onChange: (content: { html: string; safeHtml: SafeHtml; text: string; words: number }) => void;
   onSelectionChange: (text: string) => void;
 }) {
   const editor = useEditor({
@@ -222,6 +226,7 @@ export function RichTextEditor({
           HTMLAttributes: { rel: "noopener noreferrer nofollow", target: "_blank" },
         },
       }),
+      CharacterCount,
       Placeholder.configure({ placeholder: "Begin met schrijven, of laat de agent een eerste concept maken…" }),
     ],
     content: value,
@@ -230,7 +235,13 @@ export function RichTextEditor({
     editorProps: {
       attributes: { class: "tiptap prose-editorial px-6 py-5 sm:px-8", "aria-label": "Tekst van het contentitem" },
     },
-    onUpdate: ({ editor: e }) => onChange(e.isEmpty ? "" : e.getHTML()),
+    onUpdate: ({ editor: e }) =>
+      onChange({
+        html: e.isEmpty ? "" : e.getHTML(),
+        safeHtml: fromSchemaOutput(e.isEmpty ? "" : e.getHTML()),
+        text: e.getText({ blockSeparator: "\n" }).trim(),
+        words: e.storage.characterCount.words(),
+      }),
     onSelectionUpdate: ({ editor: e }) => {
       const { from, to } = e.state.selection;
       onSelectionChange(from === to ? "" : e.state.doc.textBetween(from, to, " ").trim());

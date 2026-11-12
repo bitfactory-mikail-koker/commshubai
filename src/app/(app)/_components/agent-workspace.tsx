@@ -224,7 +224,7 @@ export async function AgentWorkspace({ kind }: { kind: AgentKind }) {
           </div>
           <Link
             href="/agents"
-            className="inline-flex h-8 shrink-0 items-center gap-1.5 self-start rounded-md border bg-background px-2.5 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="inline-flex h-8 shrink-0 items-center gap-1.5 self-start rounded-md border bg-background px-2.5 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
           >
             Rechten en configuratie
             <ArrowUpRight className="size-3.5" />
@@ -343,7 +343,7 @@ export async function AgentWorkspace({ kind }: { kind: AgentKind }) {
             >
               <div className="space-y-3 border-b px-5 py-3">
                 {canCreate && <CreateSocialDraft articles={socialSources.data ?? []} />}
-                <Notice tone="demo" icon={Share2} title="Plaatsen is gesimuleerd">
+                <Notice tone="demo" icon={Share2} title="Plaatsen is gesimuleerd" inset>
                   Er is geen LinkedIn-koppeling verbonden. Na goedkeuring kopieer je de tekst en plaats je die handmatig; de hub legt
                   alleen vast dat de post is geplaatst.
                 </Notice>
@@ -414,7 +414,7 @@ export async function AgentWorkspace({ kind }: { kind: AgentKind }) {
                 </div>
                 <Link
                   href={`/newsletters/${newsletter.data.id}`}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-2.5 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-2.5 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Mail className="size-3.5" />
                   Open bij Edities

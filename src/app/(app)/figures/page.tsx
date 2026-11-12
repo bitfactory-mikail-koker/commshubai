@@ -1,3 +1,4 @@
+import { subDays } from "date-fns";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ToneBadge } from "@/components/shared/badges";
@@ -5,7 +6,7 @@ import { EmptyState, PageHeader, Panel, StatCard } from "@/components/shared/lay
 import { monthStart } from "@/lib/ai/metering";
 import { requirePagePermission } from "@/lib/auth";
 import { ORIGIN_LABELS } from "@/lib/constants";
-import { formatMonth } from "@/lib/format";
+import { formatMonth, formatEuro } from "@/lib/format";
 import { redactieSettings } from "@/lib/redactie/settings";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -36,7 +37,6 @@ const TASK_LABELS: Record<string, string> = {
 };
 
 const number = (value: number) => value.toLocaleString("nl-NL");
-const euro = (value: number) => `€ ${value.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const percent = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : "");
 
 function median(values: number[]): number | null {
@@ -87,7 +87,7 @@ export default async function FiguresPage({
   const params = await searchParams;
   const period = PERIODS.find((p) => p.key === params.periode) ?? PERIODS[0];
   const now = new Date();
-  const since = new Date(now.getTime() - period.days * 86_400_000).toISOString();
+  const since = subDays(now, period.days).toISOString();
   const settings = redactieSettings(session.organization.settings);
   const db = await createClient();
 
@@ -219,7 +219,7 @@ export default async function FiguresPage({
                 scroll={false}
                 aria-current={period.key === option.key ? "page" : undefined}
                 className={cn(
-                  "inline-flex h-7 items-center rounded-md px-2.5 text-[0.8125rem] font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                  "inline-flex h-7 items-center rounded-md px-2.5 text-[0.8125rem] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   period.key === option.key ? "bg-secondary text-foreground ring-1 ring-border ring-inset" : "text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -250,8 +250,8 @@ export default async function FiguresPage({
         />
         <StatCard
           label={`AI-kosten ${formatMonth(now)}`}
-          value={euro(cost)}
-          hint={ceiling > 0 ? `Plafond ${euro(ceiling)}` : "Geen plafond ingesteld"}
+          value={formatEuro(cost)}
+          hint={ceiling > 0 ? `Plafond ${formatEuro(ceiling)}` : "Geen plafond ingesteld"}
           href="/bot?weergave=instellingen"
         />
       </div>
@@ -452,8 +452,8 @@ export default async function FiguresPage({
         }
         description={
           ceiling > 0
-            ? `${euro(cost)} van ${euro(ceiling)} gebruikt in ${number(calls)} aanroepen. Een schatting op basis van tokens.`
-            : `${euro(cost)} gebruikt in ${number(calls)} aanroepen. Er is geen plafond ingesteld.`
+            ? `${formatEuro(cost)} van ${formatEuro(ceiling)} gebruikt in ${number(calls)} aanroepen. Een schatting op basis van tokens.`
+            : `${formatEuro(cost)} gebruikt in ${number(calls)} aanroepen. Er is geen plafond ingesteld.`
         }
         flush
       >
@@ -501,7 +501,7 @@ export default async function FiguresPage({
                       <td className="text-right tabular-nums">{number(row.calls)}</td>
                       <td className="hidden text-right tabular-nums sm:table-cell">{number(row.input)}</td>
                       <td className="hidden text-right tabular-nums sm:table-cell">{number(row.output)}</td>
-                      <td className="text-right tabular-nums">{euro(row.cost)}</td>
+                      <td className="text-right tabular-nums">{formatEuro(row.cost)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -511,7 +511,7 @@ export default async function FiguresPage({
                     <td className="text-right tabular-nums">{number(calls)}</td>
                     <td className="hidden text-right tabular-nums sm:table-cell">{number(usageList.reduce((sum, r) => sum + r.input, 0))}</td>
                     <td className="hidden text-right tabular-nums sm:table-cell">{number(usageList.reduce((sum, r) => sum + r.output, 0))}</td>
-                    <td className="text-right tabular-nums">{euro(cost)}</td>
+                    <td className="text-right tabular-nums">{formatEuro(cost)}</td>
                   </tr>
                 </tfoot>
               </table>

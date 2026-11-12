@@ -231,7 +231,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
             <Link
               href={href({ alles: !showAll })}
               scroll={false}
-              className="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[0.8125rem] font-medium text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[0.8125rem] font-medium text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
             >
               {showAll ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
               {showAll ? "Verberg afgewezen en duplicaten" : `Toon afgewezen en duplicaten (${hiddenCount})`}

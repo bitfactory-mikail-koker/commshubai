@@ -33,6 +33,15 @@ export const env = {
   get slackLoginEnabled() {
     return process.env.NEXT_PUBLIC_SLACK_LOGIN === "true";
   },
+  get slackApiUrl(): string | undefined {
+    return process.env.SLACK_API_URL?.trim() || undefined;
+  },
+  get integrationAllowPrivateHosts() {
+    return process.env.INTEGRATION_ALLOW_PRIVATE_HOSTS === "true";
+  },
+  get googleLoginEnabled() {
+    return process.env.NEXT_PUBLIC_GOOGLE_LOGIN === "true";
+  },
   get inboundMailSecret(): string | null {
     return process.env.INBOUND_MAIL_SECRET?.trim() || null;
   },

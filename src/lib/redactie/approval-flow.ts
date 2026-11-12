@@ -6,6 +6,7 @@ import { attributeQuotes, type Speaker } from "@/lib/redactie/quotes";
 import { addWorkingDays, workingDaysBetween } from "@/lib/redactie/workdays";
 import { createAdminClient, type AdminClient } from "@/lib/supabase/admin";
 import type { Approval, ApprovalEntity, ApprovalKind, Classification, InterviewSummary, RuleStep } from "@/lib/types";
+import { errorMessage, mapSettled } from "@/lib/concurrency";
 
 /**
  * Rule-based approval.
@@ -486,7 +487,7 @@ export async function processApprovalDeadlines(organizationId: string, now = new
   const db = createAdminClient();
   const { data: open } = await db
     .from("approvals")
-    .select("*")
+    .select("base_version, decision, due_at, eligible_profile_ids, entity_id, entity_type, escalated_at, id, item_id, kind, organization_id, quote_text, reminded_at, requested_at, requested_by_agent_id, requested_by_profile_id, scope, step, step_label, version")
     .eq("organization_id", organizationId)
     .eq("decision", "pending")
     .order("requested_at", { ascending: true })
@@ -545,8 +546,8 @@ export async function processApprovalDeadlines(organizationId: string, now = new
 
     if (!approval.reminded_at && workingDaysBetween(new Date(approval.requested_at), now) >= REMINDER_AFTER_WORKING_DAYS) {
       await db.from("approvals").update({ reminded_at: now.toISOString() }).eq("id", approval.id);
-      for (const profileId of approval.eligible_profile_ids) {
-        const result = await sendBotMessage({
+      const results = await mapSettled(approval.eligible_profile_ids, (profileId) =>
+        sendBotMessage({
           organizationId,
           kind: "reminder",
           medium: "dm",
@@ -555,9 +556,15 @@ export async function processApprovalDeadlines(organizationId: string, now = new
           entityType: ref.entityType,
           entityId: ref.entityId,
           now,
-        });
-        if (result.status !== "blocked") reminded++;
+        }),
+      );
+      const delivered = results.filter((outcome) => outcome.ok && outcome.value.status !== "blocked" && outcome.value.status !== "failed");
+      const errors = results.flatMap((outcome) => (outcome.ok ? (outcome.value.status === "failed" ? [outcome.value.reason ?? "mislukt"] : []) : [errorMessage(outcome.error)]));
+      if (errors.length > 0) console.error("[approvals] reminder failed", approval.id, errors);
+      if (errors.length === results.length && results.length > 0) {
+        await db.from("approvals").update({ reminded_at: null }).eq("id", approval.id);
       }
+      reminded += delivered.length;
     }
   }
 

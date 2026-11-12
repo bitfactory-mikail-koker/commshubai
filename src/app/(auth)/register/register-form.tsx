@@ -9,8 +9,26 @@ import { Input } from "@/components/ui/input";
 export function RegisterForm() {
   const { run, pending, fieldErrors } = useAction();
   const [form, setForm] = useState({ organizationName: "", fullName: "", email: "", password: "" });
+  const [sentTo, setSentTo] = useState<string | null>(null);
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  if (sentTo) {
+    return (
+      <div className="space-y-4" role="status">
+        <h1 className="text-xl font-semibold tracking-[-0.014em]">Controleer je e-mail</h1>
+        <p className="text-[0.8125rem] leading-relaxed text-muted-foreground">
+          We hebben een bevestigingslink gestuurd naar <span className="font-medium text-foreground">{sentTo}</span>. Open die link om je omgeving te
+          activeren en in te loggen. Je kunt pas inloggen nadat je het adres hebt bevestigd.
+        </p>
+        <p className="text-[0.8125rem] text-muted-foreground">
+          <Link href="/login" className="font-medium text-info underline underline-offset-4">
+            Naar het inloggen
+          </Link>
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -24,7 +42,7 @@ export function RegisterForm() {
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
-          run(() => register(form));
+          run(() => register(form), { silent: true, onSuccess: () => setSentTo(form.email) });
         }}
       >
         <FormField label="Naam van de organisatie" htmlFor="organizationName" error={fieldErrors.organizationName} required>

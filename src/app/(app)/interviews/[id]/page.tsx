@@ -25,20 +25,21 @@ export default async function InterviewPage({ params }: { params: Promise<{ id: 
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const db = await createClient();
 
-  const { data: interview } = await db
-    .from("interviews")
-    .select(
-      "*, agent:agents(kind, name), article:articles!interviews_article_id_fkey(id, title, status), opportunity:content_opportunities(id, title, signal_id), interviewee:profiles!interviews_interviewee_profile_id_fkey(full_name, avatar_color)",
-    )
-    .eq("id", id)
-    .maybeSingle();
+  const [{ data: interview }, { data: messages }] = await Promise.all([
+    db
+      .from("interviews")
+      .select(
+        "*, agent:agents(kind, name), article:articles!interviews_article_id_fkey(id, title, status), opportunity:content_opportunities(id, title, signal_id), interviewee:profiles!interviews_interviewee_profile_id_fkey(full_name, avatar_color)",
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    db
+      .from("interview_messages")
+      .select("id, role, content, question_id, created_at")
+      .eq("interview_id", id)
+      .order("created_at", { ascending: true }),
+  ]);
   if (!interview) notFound();
-
-  const { data: messages } = await db
-    .from("interview_messages")
-    .select("id, role, content, question_id, created_at")
-    .eq("interview_id", id)
-    .order("created_at", { ascending: true });
 
   const status = interview.status as InterviewStatus;
   const canManage = can(session, "content.create");

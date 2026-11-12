@@ -217,7 +217,7 @@ export function DecisionPanel({
               <Input id="edit-title" value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)} maxLength={200} required />
             </FormField>
             <div className="rounded-md border px-4 py-3">
-              <RichTextEditor value={draftBody} editable onChange={setDraftBody} onSelectionChange={() => undefined} />
+              <RichTextEditor value={draftBody} editable onChange={({ html }) => setDraftBody(html)} onSelectionChange={() => undefined} />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={close} disabled={pending}>

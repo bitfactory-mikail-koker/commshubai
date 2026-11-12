@@ -6,6 +6,7 @@ import type {
   ContentType,
   ExternalPermission,
 } from "@/lib/types";
+import type { SafeHtml } from "@/lib/safe-html";
 
 export type Person = { full_name: string; avatar_color: string };
 export type AgentRef = { kind: AgentKind; name: string };
@@ -15,6 +16,9 @@ export type EditorArticle = {
   title: string;
   subtitle: string | null;
   bodyHtml: string;
+  previewHtml: SafeHtml;
+  text: string;
+  words: number;
   status: ContentStatus;
   version: number;
   channel: string | null;
@@ -29,7 +33,8 @@ export type VersionItem = {
   version: number;
   title: string;
   subtitle: string | null;
-  body_html: string;
+  body_html: SafeHtml;
+  words: number;
   change_summary: string | null;
   created_at: string;
   profile: Person | null;

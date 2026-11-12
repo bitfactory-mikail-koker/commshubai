@@ -1,8 +1,8 @@
-import { timingSafeEqual } from "node:crypto";
 import { env } from "@/lib/env";
 import { handleInboundMail } from "@/lib/redactie/intake";
 import { redactieSettings } from "@/lib/redactie/settings";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { safeEqual } from "@/lib/secure-compare";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   const secret = env.inboundMailSecret;
   const given = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  if (!secret || given.length !== secret.length || !timingSafeEqual(Buffer.from(given), Buffer.from(secret))) {
+  if (!secret || !safeEqual(given, secret)) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 

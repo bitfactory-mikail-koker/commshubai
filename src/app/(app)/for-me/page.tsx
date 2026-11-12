@@ -131,7 +131,10 @@ export default async function ForMePage() {
 
   const mine = (mineRes.data ?? []) as QueueItem[];
   const editorQueue = [...((editorsRes.data ?? []) as QueueItem[]), ...((overdueRes.data ?? []) as QueueItem[])];
-  const titles = await entityTitles(db, [...mine, ...editorQueue]);
+  const [titles, { data: interviewedFor }] = await Promise.all([
+    entityTitles(db, [...mine, ...editorQueue]),
+    db.from("interviews").select("article_id").eq("interviewee_profile_id", session.userId).not("article_id", "is", null),
+  ]);
   const mineGroups = group(mine, titles);
   const editorGroups = group(editorQueue, titles).filter((g) => !mineGroups.some((m) => m.key === g.key));
 
@@ -140,11 +143,6 @@ export default async function ForMePage() {
 
   // Pieces this person was involved in: decided on, or interviewed for.
   const involvedIds = Array.from(new Set((involvedRes.data ?? []).map((r) => r.entity_id)));
-  const { data: interviewedFor } = await db
-    .from("interviews")
-    .select("article_id")
-    .eq("interviewee_profile_id", session.userId)
-    .not("article_id", "is", null);
   for (const row of interviewedFor ?? []) if (row.article_id && !involvedIds.includes(row.article_id)) involvedIds.push(row.article_id);
   const openIds = new Set(mineGroups.filter((g) => g.type === "article").map((g) => g.id));
   const { data: involved } = involvedIds.length

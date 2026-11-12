@@ -1,3 +1,4 @@
+import { subMinutes, subWeeks } from "date-fns";
 import "server-only";
 import { logSystemAction } from "@/lib/audit";
 import { decryptJson, encryptJson } from "@/lib/crypto";
@@ -187,7 +188,7 @@ export async function syncIntegration(input: {
   const now = new Date();
   try {
     const secrets = await loadSecrets(integration.id);
-    const since = integration.last_sync_at ? new Date(integration.last_sync_at) : new Date(now.getTime() - 7 * 86400_000);
+    const since = integration.last_sync_at ? new Date(integration.last_sync_at) : subWeeks(now, 1);
     const fetched = await fetchMessages(input.provider, fromJson<Record<string, unknown>>(integration.config, {}), secrets, since);
     const ids = await storeMessages(input.organizationId, integration.id, fetched.map((m) => ({ ...m, isDemo: false })));
     const processed = ids.length
@@ -246,7 +247,7 @@ export async function ingestDemoMessages(input: {
         title: m.title,
         body: m.body,
         url: null,
-        occurredAt: new Date(now - (input.messages.length - i) * 60_000).toISOString(),
+        occurredAt: subMinutes(now, input.messages.length - i).toISOString(),
         metadata: { ...m.metadata, demo: true },
         isDemo: true,
       },

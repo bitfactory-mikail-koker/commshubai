@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { AgentKind } from "@/lib/types";
 import { StartMdUpdateButton } from "./_components/md-update-actions";
 import { PrepareNewsletterForm } from "./_components/prepare-form";
+import { NEWSLETTER_LIST_COLUMNS } from "@/lib/columns";
 
 export const metadata: Metadata = { title: "Edities" };
 
@@ -33,7 +34,7 @@ export default async function NewslettersPage() {
   const editorial = can(session, "content.create", "content.edit", "content.review", "content.approve");
 
   const [{ data: newsletters, error }, { data: items }] = await Promise.all([
-    db.from("newsletters").select("*").order("period_month", { ascending: false }),
+    db.from("newsletters").select(NEWSLETTER_LIST_COLUMNS).order("period_month", { ascending: false }),
     db.from("newsletter_items").select("newsletter_id, included"),
   ]);
   if (error) throw new Error(error.message);

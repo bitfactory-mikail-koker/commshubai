@@ -17,6 +17,7 @@ import type { Database } from "../src/lib/database.types";
 import { DEMO_PASSWORD } from "./seed-content";
 
 config({ path: ".env.local" });
+delete process.env.ANTHROPIC_API_KEY;
 
 let passed = 0;
 let failed = 0;
@@ -58,6 +59,8 @@ async function main() {
   const { requestApproval, decideOwnApproval, decideApproval } = await import("../src/lib/approvals");
   const { reviseArticle } = await import("../src/lib/agents/pipelines");
   const { startApprovalRound } = await import("../src/lib/redactie/approval-flow");
+  const { loadRedactieSettings } = await import("../src/lib/redactie/bot");
+  const { isWorkingTime } = await import("../src/lib/redactie/workdays");
 
   const { data: org } = await service.from("organizations").select("id, settings").eq("slug", "noordlicht-digital").single();
   const O = org!.id;
@@ -101,7 +104,13 @@ async function main() {
   check("picking up starts a piece and interviews the DM and Strateeg of the project", picked.interviewIds.length >= 2, `${picked.interviewIds.length} interviews, skipped: ${picked.skippedInterviews.join("; ")}`);
   const { data: timInterview } = await service.from("interviews").select("id, status").in("id", picked.interviewIds).eq("interviewee_profile_id", timId).single();
   const { data: invite } = await service.from("bot_messages").select("status, body").eq("entity_id", timInterview!.id).eq("kind", "interview_invite").single();
-  check("the interviewee gets an invitation by DM", invite?.status === "simulated" && /nu[\s\S]*later[\s\S]*niet de juiste persoon/.test(invite.body), invite?.status);
+  const botSettings = await loadRedactieSettings(service, O);
+  const expectedInviteStatus = isWorkingTime(new Date(), botSettings.workStart, botSettings.workEnd) ? "simulated" : "scheduled";
+  check(
+    `the interviewee gets an invitation by DM (${expectedInviteStatus}: working hours decide)`,
+    invite?.status === expectedInviteStatus && /nu[\s\S]*later[\s\S]*niet de juiste persoon/.test(invite.body),
+    invite?.status,
+  );
   const started = await handleDirectMessage({ organizationId: O, profileId: timId, text: "nu", trigger: "manual" });
   check("answering “nu” starts the interview with the first question", started.handled === "interview" && Boolean(started.reply));
   let reply = started.reply ?? "";

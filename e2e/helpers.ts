@@ -11,6 +11,25 @@ export async function login(page: Page, email: string) {
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 }
 
+const MAILPIT = "http://127.0.0.1:54324";
+
+type MailpitList = { messages: { ID: string; To: { Address: string }[]; Created: string }[] };
+type MailpitMessage = { Text: string; HTML: string };
+
+export async function confirmationLinkFor(address: string): Promise<string> {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const list = (await (await fetch(`${MAILPIT}/api/v1/messages`)).json()) as MailpitList;
+    const mail = list.messages.find((message) => message.To.some((to) => to.Address.toLowerCase() === address.toLowerCase()));
+    if (mail) {
+      const body = (await (await fetch(`${MAILPIT}/api/v1/message/${mail.ID}`)).json()) as MailpitMessage;
+      const link = `${body.Text}\n${body.HTML}`.match(/https?:\/\/[^\s"'<>]*\/auth\/confirm\?[^\s"'<>]+/)?.[0];
+      if (link) return link.replaceAll("&amp;", "&");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(`Geen bevestigingsmail gevonden voor ${address}`);
+}
+
 /** Collects console errors and failed requests so tests can assert a clean page. */
 export function trackErrors(page: Page): string[] {
   const errors: string[] = [];

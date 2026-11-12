@@ -1,3 +1,4 @@
+import { differenceInDays } from "date-fns";
 import { toZoned } from "@/lib/format";
 import type { RedactieSettings } from "@/lib/redactie/settings";
 import { isWorkingTime, nextWorkingMoment } from "@/lib/redactie/workdays";
@@ -70,7 +71,7 @@ export function decideDelivery(request: DeliveryRequest, settings: RedactieSetti
         return { action: "block", reason: `Deze persoon is afwezig tot en met ${recipient.absentUntil}.` };
       }
       if (request.countsAsRequest && settings.minDaysBetweenRequests > 0 && recipient.lastRequestedAt) {
-        const days = (now.getTime() - new Date(recipient.lastRequestedAt).getTime()) / 86_400_000;
+        const days = differenceInDays(now, new Date(recipient.lastRequestedAt));
         if (days < settings.minDaysBetweenRequests) {
           return {
             action: "block",

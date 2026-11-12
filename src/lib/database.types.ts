@@ -1253,6 +1253,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"search_index": {
+                  Row: {
+                    "doc": unknown,"entity_id": string,"kind": string,"like_text": string,"organization_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "doc": unknown,"entity_id": string,"kind": string,"like_text": string,"organization_id": string
+                  }
+                  Update: {
+                    "doc"?: unknown,"entity_id"?: string,"kind"?: string,"like_text"?: string,"organization_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "search_index_organization_id_fkey"
+      columns: ["organization_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"signal_sources": {
                   Row: {
                     "created_at": string,"organization_id": string,"relation": string,"signal_id": string,"source_message_id": string
@@ -1419,6 +1439,9 @@ isOneToOne: false
                            },
 "is_project_member":
 { Args: { "p_project_id": string }; Returns: boolean
+                           },
+"search_all":
+{ Args: { "p_kind"?: string,"p_like": string,"p_limit"?: number,"p_offset"?: number,"p_tsquery": string }; Returns: Json
                            }
           }
           Enums: {

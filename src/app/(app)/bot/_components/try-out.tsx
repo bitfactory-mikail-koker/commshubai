@@ -127,7 +127,7 @@ export function TryOut({
                 aria-pressed={kind === option.key}
                 onClick={() => choose(option.key)}
                 className={cn(
-                  "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[0.8125rem] transition-colors duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                  "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[0.8125rem] transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   kind === option.key
                     ? "bg-secondary font-medium text-foreground ring-1 ring-border ring-inset"
                     : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground",

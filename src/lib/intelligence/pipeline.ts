@@ -1,3 +1,4 @@
+import { subDays } from "date-fns";
 import "server-only";
 import { evaluateSignal } from "@/lib/agents/pipelines";
 import { AgentPausedError, toSourceMaterial, withRun } from "@/lib/agents/runtime";
@@ -70,7 +71,7 @@ export async function processSourceMessages(options: {
       rt.use("read_sources");
       let query = rt.db
         .from("source_messages")
-        .select("*")
+        .select("author_name, author_profile_id, body, channel, channel_id, excluded, id, is_demo, metadata, occurred_at, slack_ts, source, title, url")
         .eq("organization_id", rt.orgId)
         .order("occurred_at", { ascending: true })
         .limit(25);
@@ -89,7 +90,7 @@ export async function processSourceMessages(options: {
           .select("id, title, summary, category, entities, related_signal_ids, status")
           .eq("organization_id", rt.orgId)
           .neq("status", "duplicate")
-          .gte("detected_at", new Date(Date.now() - 90 * 86400_000).toISOString()),
+          .gte("detected_at", subDays(new Date(), 90).toISOString()),
       ]);
       const knownPeople = (people ?? []).map((p) => p.full_name);
       const known = (recentSignals ?? []).map((s) => ({
@@ -213,7 +214,7 @@ export async function processSourceMessages(options: {
             .select("id, title, body, source")
             .eq("organization_id", rt.orgId)
             .neq("id", message.id)
-            .gte("occurred_at", new Date(new Date(message.occurred_at).getTime() - 60 * 86400_000).toISOString())
+            .gte("occurred_at", subDays(new Date(message.occurred_at), 60).toISOString())
             .order("occurred_at", { ascending: false })
             .limit(200);
           const hits = (candidates ?? [])

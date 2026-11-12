@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { initials } from "@/lib/format";
-import { sanitizeHtml } from "@/lib/sanitize";
+import { markPlaceholders } from "@/lib/placeholders";
+import type { SafeHtml } from "@/lib/safe-html";
 import { cn } from "@/lib/utils";
 
 /**
@@ -130,7 +131,7 @@ export function StatCard({
   return href ? (
     <Link
       href={href}
-      className="block h-full rounded-sm outline-none transition-colors duration-150 hover:[&>div]:border-foreground/40 focus-visible:ring-3 focus-visible:ring-ring/50"
+      className="block h-full rounded-sm outline-none transition-colors duration-150 hover:[&>div]:border-foreground/40 focus-visible:ring-2 focus-visible:ring-ring"
     >
       {body}
     </Link>
@@ -190,9 +191,9 @@ export function Field({ label, children, className }: { label: string; children:
   );
 }
 
-/** Renders stored editorial HTML (sanitized) with article typography. */
-export function HtmlContent({ html, compact, className }: { html: string | null | undefined; compact?: boolean; className?: string }) {
-  const safe = sanitizeHtml(html).replace(/\[AANVULLEN[^\]]*\]/g, (m) => `<mark class="placeholder-mark">${m}</mark>`);
+/** Renders editorial HTML that has been through sanitizeHtml, which the SafeHtml type guarantees. */
+export function HtmlContent({ html, compact, className }: { html: SafeHtml; compact?: boolean; className?: string }) {
+  const safe = markPlaceholders(html);
   return (
     <div
       className={cn("prose-editorial", compact && "prose-compact", className)}
@@ -212,7 +213,7 @@ export function FilterTabs({
   className?: string;
 }) {
   return (
-    <nav className={cn("flex flex-wrap gap-1", className)} aria-label="Filters">
+    <nav className={cn("flex flex-wrap gap-1", className)} aria-label="Filter op soort">
       {items.map((item) => {
         const isActive = item.key === active;
         return (
@@ -222,7 +223,7 @@ export function FilterTabs({
             scroll={false}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[0.8125rem] transition-colors duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+              "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[0.8125rem] transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-ring",
               isActive
                 ? "bg-secondary font-medium text-foreground ring-1 ring-border ring-inset"
                 : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground",
@@ -244,22 +245,24 @@ export function Notice({
   title,
   children,
   className,
+  inset = false,
 }: {
   tone?: "info" | "warning" | "demo" | "success" | "danger";
   icon?: LucideIcon;
   title?: string;
   children?: React.ReactNode;
   className?: string;
+  inset?: boolean;
 }) {
   const tones = {
-    info: { box: "border-info/20 bg-info-soft/45", icon: "text-info" },
-    warning: { box: "border-warning/25 bg-warning-soft/55", icon: "text-warning" },
-    demo: { box: "border-dashed border-input bg-subtle", icon: "text-muted-foreground" },
-    success: { box: "border-success/20 bg-success-soft/50", icon: "text-success" },
-    danger: { box: "border-danger/20 bg-danger-soft/60", icon: "text-danger" },
+    info: { box: "border-info/20 bg-info-soft/45", fill: "bg-info-soft/45", icon: "text-info" },
+    warning: { box: "border-warning/25 bg-warning-soft/55", fill: "bg-warning-soft/55", icon: "text-warning" },
+    demo: { box: "border-dashed border-input bg-subtle", fill: "bg-subtle", icon: "text-muted-foreground" },
+    success: { box: "border-success/20 bg-success-soft/50", fill: "bg-success-soft/50", icon: "text-success" },
+    danger: { box: "border-danger/20 bg-danger-soft/60", fill: "bg-danger-soft/60", icon: "text-danger" },
   }[tone];
   return (
-    <div className={cn("flex gap-2.5 rounded-lg border px-3.5 py-3 text-[0.8125rem] leading-relaxed", tones.box, className)} role="note">
+    <div className={cn("flex gap-2.5 rounded-lg px-3.5 py-3 text-[0.8125rem] leading-relaxed", inset ? tones.fill : cn("border", tones.box), className)} role={tone === "warning" || tone === "danger" ? "alert" : "note"}>
       {Icon && <Icon className={cn("mt-0.5 size-4 shrink-0", tones.icon)} strokeWidth={1.75} />}
       <div className="min-w-0 space-y-0.5">
         {title && <p className="font-medium text-foreground">{title}</p>}

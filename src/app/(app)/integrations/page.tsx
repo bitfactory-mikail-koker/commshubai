@@ -23,6 +23,8 @@ import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 import type { Integration, IntegrationProvider } from "@/lib/types";
 
+type IntegrationRow = Omit<Integration, "config" | "scopes" | "created_at" | "updated_at" | "organization_id">;
+
 export const metadata: Metadata = { title: "Integraties" };
 
 const ICONS: Record<IntegrationProvider, LucideIcon> = {
@@ -34,7 +36,7 @@ const ICONS: Record<IntegrationProvider, LucideIcon> = {
   linkedin: Share2,
 };
 
-function syncSummary(row: Integration | undefined, definition: IntegrationDefinition): string {
+function syncSummary(row: IntegrationRow | undefined, definition: IntegrationDefinition): string {
   if (!row?.last_sync_at) {
     return definition.role === "publication" ? "Geen synchronisatie (publicatiekanaal)" : "Nog niet gesynchroniseerd";
   }
@@ -45,7 +47,7 @@ function syncSummary(row: Integration | undefined, definition: IntegrationDefini
 
 const ROW_COLUMNS = "grid-cols-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)_8.5rem_1rem]";
 
-function IntegrationRow({ definition, row }: { definition: IntegrationDefinition; row: Integration | undefined }) {
+function IntegrationRow({ definition, row }: { definition: IntegrationDefinition; row: IntegrationRow | undefined }) {
   const Icon = ICONS[definition.provider];
   const status = row?.status ?? "not_connected";
   return (
@@ -102,7 +104,7 @@ export default async function IntegrationsPage() {
     "content.approve",
   );
   const db = await createClient();
-  const { data: rows, error } = await db.from("integrations").select("*");
+  const { data: rows, error } = await db.from("integrations").select("display_name, has_credentials, id, last_error, last_sync_at, last_sync_count, last_sync_status, last_tested_at, provider, status");
   if (error) throw new Error(error.message);
 
   const byProvider = new Map((rows ?? []).map((r) => [r.provider, r]));

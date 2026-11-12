@@ -23,7 +23,9 @@ export type PublicationResult = { mode: "cms" | "simulated"; detail: string };
  * External content goes to the CMS webhook when that integration is connected;
  * otherwise the publication is simulated and stored as such.
  */
-export async function publishArticle(db: Db, article: Article): Promise<PublicationResult> {
+export type PublishableArticle = Pick<Article, "id" | "organization_id" | "classification" | "current_version" | "external_permission" | "title" | "subtitle" | "excerpt" | "body_html" | "content_type" | "tags">;
+
+export async function publishArticle(db: Db, article: PublishableArticle): Promise<PublicationResult> {
   let result: PublicationResult = {
     mode: "simulated",
     detail:

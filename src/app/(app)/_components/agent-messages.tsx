@@ -63,7 +63,7 @@ export function AgentMessageList({
             <p className="max-w-3xl text-sm leading-relaxed whitespace-pre-line text-muted-foreground">{message.body}</p>
           </div>
           {message.response && (
-            <div className="max-w-3xl rounded-lg border bg-subtle px-3.5 py-2.5">
+            <div className="max-w-3xl rounded-lg bg-muted/60 px-3.5 py-2.5">
               <p className="mb-1 flex items-center gap-2 text-xs font-medium text-muted-foreground">
                 Reactie van de {message.to?.name ?? "agent"}
                 {message.responded_at && <span className="font-normal">· {formatDay(message.responded_at)}</span>}

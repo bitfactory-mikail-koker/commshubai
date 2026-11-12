@@ -9,6 +9,7 @@ import { can, requireActionSession, type SessionContext } from "@/lib/auth";
 import { startApprovalRound, type EntityRef } from "@/lib/redactie/approval-flow";
 import { needsFinalCheck } from "@/lib/redactie/topics";
 import { check, fail, ok, runAction, unwrap, type ActionResult } from "@/lib/result";
+import { htmlTextLength } from "@/lib/html-text";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -234,7 +235,7 @@ export async function editAndApprove(input: z.input<typeof editSchema>): Promise
       return fail("Dit stuk is intussen gewijzigd. Open het opnieuw.");
     }
     if (article.title === data.title && article.body_html === bodyHtml) return fail("Je hebt niets gewijzigd. Kies “Akkoord” als de tekst klopt.");
-    if (bodyHtml.replace(/<[^>]+>/g, "").trim().length < 20) return fail("De tekst is te kort.");
+    if (htmlTextLength(bodyHtml) < 20) return fail("De tekst is te kort.");
 
     const version = article.current_version + 1;
     check(

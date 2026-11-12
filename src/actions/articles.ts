@@ -1,5 +1,6 @@
 "use server";
 
+import { isBefore, subMinutes } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
@@ -17,6 +18,7 @@ import { CONTENT_STATUS_META, CONTENT_TYPES } from "@/lib/constants";
 import { formatDateTime, parseDateInput } from "@/lib/format";
 import { publishArticle } from "@/lib/publication";
 import { check, fail, ok, runAction, unwrap, type ActionResult } from "@/lib/result";
+import { htmlTextLength } from "@/lib/html-text";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { createClient } from "@/lib/supabase/server";
 import type { ContentStatus } from "@/lib/types";
@@ -134,7 +136,7 @@ export async function saveArticleContent(input: z.input<typeof saveSchema>): Pro
     // Early-stage items become a draft as soon as someone writes the text.
     const nextStatus: ContentStatus =
       ["new_signal", "research", "interview_requested", "interview_completed", "changes_requested"].includes(article.status) &&
-      data.bodyHtml.replace(/<[^>]+>/g, "").trim().length > 0
+      htmlTextLength(data.bodyHtml) > 0
         ? "draft"
         : article.status;
 
@@ -253,7 +255,7 @@ export async function submitForReview(input: { id: string; reviewerId?: string |
     if (!canTransition(article.status, "in_review")) {
       return fail(`Vanuit de status “${CONTENT_STATUS_META[article.status].label}” kan dit item niet ter review worden ingediend.`);
     }
-    if (article.body_html.replace(/<[^>]+>/g, "").trim().length < 20) {
+    if (htmlTextLength(article.body_html) < 20) {
       return fail("Het item heeft nog geen tekst om te beoordelen.");
     }
 
@@ -379,7 +381,7 @@ export async function scheduleArticle(input: { id: string; publishAt: string }):
     const id = z.uuid().parse(input.id);
     const publishAt = parseDateInput(input.publishAt);
     if (!publishAt) return fail("Kies een geldige datum en tijd.");
-    if (publishAt.getTime() < Date.now() - 60_000) return fail("Kies een moment in de toekomst.");
+    if (isBefore(publishAt, subMinutes(new Date(), 1))) return fail("Kies een moment in de toekomst.");
     const db = await createClient();
     const article = unwrap(await db.from("articles").select("*").eq("id", id).single());
     if (!["approved", "scheduled"].includes(article.status)) return fail("Alleen goedgekeurde content kan worden ingepland.");

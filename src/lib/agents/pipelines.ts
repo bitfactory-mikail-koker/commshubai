@@ -6,7 +6,7 @@ import { AgentRuntime, withRun } from "@/lib/agents/runtime";
 import type { InterviewBrief, SocialVariant, SourceMaterial, TranscriptEntry } from "@/lib/ai/types";
 import { upsertCalendarEntry } from "@/lib/calendar";
 import { CONTENT_TYPE_LABELS } from "@/lib/constants";
-import { stripHtml } from "@/lib/format";
+import { stripHtml } from "@/lib/html-text";
 import { fromJson, toJson } from "@/lib/json";
 import { loadRedactieSettings } from "@/lib/redactie/bot";
 import { removeQuote } from "@/lib/redactie/quotes";
@@ -30,6 +30,7 @@ import type {
   SourceRef,
   Stakeholder,
 } from "@/lib/types";
+import { mapConcurrent } from "@/lib/concurrency";
 
 type Trigger = "manual" | "schedule" | "event" | "demo";
 type BaseOptions = { organizationId: string; trigger: Trigger; triggeredBy?: string | null };
@@ -599,7 +600,7 @@ async function loadInterview(rt: AgentRuntime, interviewId: string) {
   if (!interview) throw new Error("Interview niet gevonden.");
   const { data: messages } = await rt.db
     .from("interview_messages")
-    .select("*")
+    .select("content, created_at, id, interview_id, question_id, role")
     .eq("interview_id", interviewId)
     .order("created_at", { ascending: true });
   const transcript: TranscriptEntry[] = (messages ?? []).map((m) => ({
@@ -882,7 +883,7 @@ async function collectArticleMaterial(rt: AgentRuntime, article: Article) {
 
   // Interviews held for this item, plus the one it explicitly references
   // (channel variants reuse the interview of the original item).
-  let interviewQuery = rt.db.from("interviews").select("*").eq("organization_id", rt.orgId);
+  let interviewQuery = rt.db.from("interviews").select("article_id, classification, id, interviewee_name, interviewee_profile_id, interviewee_role, invite_choice, is_demo, organization_id, questions, redirect_to, reminded_at, status, summary, summary_confirmed_at, title").eq("organization_id", rt.orgId);
   interviewQuery = article.interview_id
     ? interviewQuery.or(`article_id.eq.${article.id},id.eq.${article.interview_id}`)
     : interviewQuery.eq("article_id", article.id);
@@ -897,19 +898,19 @@ async function collectArticleMaterial(rt: AgentRuntime, article: Article) {
   // A piece can rest on several interviews (a customer case: the DM plus one or two team members).
   const completed = (interviews ?? []).filter((i) => i.status === "completed");
   const candidates = completed.length > 0 ? completed.reverse() : (interviews ?? []).slice(0, 1);
-  const materials: InterviewMaterial[] = [];
-  for (const interview of candidates) {
+  const loaded = await mapConcurrent(candidates, async (interview) => {
     const { transcript, questions } = await loadInterview(rt, interview.id);
-    const qa = pairQuestionsAndAnswers(questions, transcript);
-    if (qa.length === 0) continue;
-    materials.push({
+    return { interview, qa: pairQuestionsAndAnswers(questions, transcript) };
+  });
+  const materials: InterviewMaterial[] = loaded
+    .filter(({ qa }) => qa.length > 0)
+    .map(({ interview, qa }) => ({
       id: interview.id,
       intervieweeName: interview.interviewee_name,
       intervieweeRole: interview.interviewee_role,
       qa,
       summary: fromJson<InterviewSummary | null>(interview.summary, null),
-    });
-  }
+    }));
   return { sources, entities, interview: materials[0] ?? null, moreInterviews: materials.slice(1) };
 }
 
@@ -1393,8 +1394,9 @@ export async function generateSocialPosts(
 
       for (const platform of options.platforms) {
         const seen = new Set<string>();
-        for (const variant of variants) {
-          const post = await rt.ai.generateSocialPost({
+        const generated = await mapConcurrent(variants, async (variant) => ({
+          variant,
+          post: await rt.ai.generateSocialPost({
             platform,
             article: {
               title: article.title,
@@ -1405,7 +1407,9 @@ export async function generateSocialPosts(
             brand,
             variant: variant.key,
             inNameOf: person?.full_name ?? null,
-          });
+          }),
+        }));
+        for (const { variant, post } of generated) {
           // Two variants that came out the same are one variant.
           if (seen.has(post.body)) continue;
           seen.add(post.body);

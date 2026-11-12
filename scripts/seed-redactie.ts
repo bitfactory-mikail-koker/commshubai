@@ -4,6 +4,7 @@
  * the application's own code (approval engine, MD-update, outreach round), so
  * the seeded state is exactly what the app would have produced.
  */
+import { addDays, addWeeks } from "date-fns";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../src/lib/database.types";
 
@@ -55,9 +56,9 @@ export async function seedRedactie({ db, orgId: O, users: U, articles: A, opport
     { key: "lotte", team: "Marketing", roles: [], pilot: true },
     { key: "femke", team: "Marketing", roles: ["commercial_lead", "strateeg"], pilot: true },
     { key: "tim", team: "Projecten", roles: ["dm"], pilot: true },
-    { key: "ruben", team: "Development", roles: ["team_lead"], patch: { contact_paused_until: new Date(Date.now() + 14 * 86_400_000).toISOString() } },
+    { key: "ruben", team: "Development", roles: ["team_lead"], patch: { contact_paused_until: addWeeks(new Date(), 2).toISOString() } },
     { key: "joost", team: "Development", roles: ["developer"], pilot: true },
-    { key: "bram", team: "Development", roles: ["developer"], patch: { absent_until: new Date(Date.now() + 6 * 86_400_000).toISOString().slice(0, 10) } },
+    { key: "bram", team: "Development", roles: ["developer"], patch: { absent_until: addDays(new Date(), 6).toISOString().slice(0, 10) } },
     { key: "marieke", team: "Directie", roles: ["md"], pilot: true, follows: true },
   ];
   for (const person of people) {

@@ -33,6 +33,8 @@ import { cn } from "@/lib/utils";
 import { AGENT_MESSAGE_SELECT, AgentMessageList, type AgentMessageWithAgents } from "../_components/agent-messages";
 import { AgentConfigDialog } from "./_components/agent-config-dialog";
 
+type AgentRow = Omit<Agent, "approval_requirements" | "created_at" | "updated_at" | "organization_id">;
+
 export const metadata: Metadata = { title: "AI-agents" };
 
 const TABS = [
@@ -95,7 +97,7 @@ function duration(start: string, end: string | null): string {
   return `${Math.floor(ms / 60_000)} min ${Math.round((ms % 60_000) / 1000)} s`;
 }
 
-function AgentCard({ agent, canManage }: { agent: Agent; canManage: boolean }) {
+function AgentCard({ agent, canManage }: { agent: AgentRow; canManage: boolean }) {
   const kind = agent.kind;
   const config = fromJson<Record<string, unknown>>(agent.config, {});
   const available = TOOLS.filter((t) => t.availableTo.includes(kind));
@@ -131,7 +133,7 @@ function AgentCard({ agent, canManage }: { agent: Agent; canManage: boolean }) {
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href={kind === "external" ? "/external" : "/internal"}
-              className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[0.8125rem] font-medium text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[0.8125rem] font-medium text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
             >
               Werkruimte
               <ArrowRight className="size-3.5" />
@@ -216,7 +218,7 @@ function AgentCard({ agent, canManage }: { agent: Agent; canManage: boolean }) {
                   key={source.key}
                   className={cn(
                     "rounded-full border px-2.5 py-0.5 text-xs",
-                    allowed ? "bg-background font-medium" : "border-dashed text-muted-foreground/70 line-through",
+                    allowed ? "bg-background font-medium" : "border-dashed text-muted-foreground line-through",
                   )}
                 >
                   {source.label}
@@ -261,7 +263,7 @@ export default async function AgentsPage({
   const ai = aiStatus();
   const db = await createClient();
 
-  const { data: agentRows, error } = await db.from("agents").select("*").order("kind", { ascending: false });
+  const { data: agentRows, error } = await db.from("agents").select("allowed_sources, allowed_tools, config, description, id, kind, last_run_at, mission, name, status").order("kind", { ascending: false });
   if (error) throw new Error(error.message);
   const agents = agentRows ?? [];
 
@@ -590,7 +592,7 @@ export default async function AgentsPage({
                 scroll={false}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "-mb-px border-b-2 px-3 py-2.5 text-sm font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                  "-mb-px border-b-2 px-3 py-2.5 text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   isActive ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
                 )}
               >

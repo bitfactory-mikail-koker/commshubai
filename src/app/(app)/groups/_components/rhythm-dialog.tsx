@@ -127,7 +127,7 @@ export function RhythmDialog({ rhythm, groups }: { rhythm: RhythmRow; groups: Op
                   aria-checked={form.mode === mode.value}
                   onClick={() => setForm((f) => ({ ...f, mode: mode.value }))}
                   className={cn(
-                    "h-7 rounded-md px-2.5 text-[0.8125rem] outline-none transition-colors duration-150 focus-visible:ring-3 focus-visible:ring-ring/50",
+                    "h-7 rounded-md px-2.5 text-[0.8125rem] outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring",
                     form.mode === mode.value
                       ? "bg-secondary font-medium text-foreground ring-1 ring-border ring-inset"
                       : "text-muted-foreground hover:text-foreground",
